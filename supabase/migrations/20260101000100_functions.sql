@@ -40,20 +40,50 @@ $$;
 revoke all on function public.assert_owner() from public;
 grant execute on function public.assert_owner() to authenticated;
 
+-- ----------------------------------------------------------------------------
+-- هل هذا اليوم يوم إغلاق؟ (الجمعة والسبت في الإعداد المعتمد)
+-- ----------------------------------------------------------------------------
+create or replace function public.is_closed_day(p_date date default null)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(
+    (extract(dow from coalesce(p_date, public.amman_today()))::smallint
+       = any (r.closed_days)),
+    false
+  )
+  from public.pricing_rules r
+  where r.is_active
+  limit 1;
+$$;
+
+comment on function public.is_closed_day(date)
+  is 'هل التاريخ ضمن أيام إغلاق الموقف حسب التسعيرة الفعّالة.';
+
+grant execute on function public.is_closed_day(date) to authenticated;
+
 -- ============================================================================
 -- محرك حساب الرسوم
 -- ----------------------------------------------------------------------------
 -- القاعدة المعتمدة (التسعيرة الافتراضية):
---   • المبلغ الأساسي 1 د.أ يغطي كامل فترة الدوام 08:00 → 15:00
---   • بعد 15:00 : 1 د.أ عن كل ساعة أو جزء من ساعة
+--   • المبلغ الأساسي 1 د.أ يغطي فترة الدوام 08:00 → 15:00
+--   • فترة سماح 15 دقيقة بعد الثالثة بلا رسوم إضافية
+--   • بعد ذلك: 1 د.أ عن كل ساعة أو جزء من ساعة، محسوبة من 15:00
 --       خروج 15:00 → 1 د.أ
---       خروج 15:01 → 2 د.أ
+--       خروج 15:10 → 1 د.أ   (داخل فترة السماح)
+--       خروج 15:20 → 2 د.أ   (تجاوز السماح → ساعة كاملة من 15:00)
 --       خروج 16:00 → 2 د.أ
 --       خروج 16:01 → 3 د.أ
+--   • الدخول قبل 08:00 يُحاسب أيضاً: ساعة أو جزء منها لكل ساعة قبل الثامنة
+--       دخول 07:00 → خروج 14:00 = 1 + 1 = 2 د.أ
+--     لأن المبلغ الأساسي يغطي فقط من دخل داخل فترة الدوام.
 --
 -- ملاحظات تصميمية مهمة:
 --   • نهاية الفترة الأساسية تُحتسب على **تاريخ الدخول** وليس تاريخ الخروج،
---     حتى تُحسب السيارة التي تبيت في الموقف بشكل صحيح.
+--     حتى لا تُفلت أي سيارة تتجاوز منتصف الليل من الحساب.
 --   • إذا دخلت السيارة بعد 15:00 يبدأ احتساب الزيادة من لحظة الدخول،
 --     فلا تُحاسب على ساعات لم تكن فيها داخل الموقف.
 --   • المبلغ الأساسي يمثّل الحد الأدنى لأي زيارة.
@@ -244,7 +274,8 @@ begin
       'normalized', v_norm,
       'vehicle', null,
       'subscription', null,
-      'active_session', null
+      'active_session', null,
+      'is_closed_day', public.is_closed_day()
     );
   end if;
 
@@ -259,7 +290,8 @@ begin
     'normalized', v_norm,
     'vehicle', to_jsonb(v_vehicle),
     'subscription', case when v_sub.id is null then null else to_jsonb(v_sub) end,
-    'active_session', case when v_session.id is null then null else to_jsonb(v_session) end
+    'active_session', case when v_session.id is null then null else to_jsonb(v_session) end,
+    'is_closed_day', public.is_closed_day()
   );
 end;
 $$;
@@ -641,6 +673,7 @@ begin
 
   select jsonb_build_object(
     'today', v_today,
+    'is_closed_day', public.is_closed_day(v_today),
     'cars_inside', (
       select count(*) from public.parking_sessions where exit_time is null
     ),

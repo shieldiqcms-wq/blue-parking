@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import {
   AlertCircle,
+  CalendarX,
   CarFront,
   LogIn,
   LogOut,
@@ -41,6 +42,14 @@ export function DashboardPage() {
         title="الرئيسية"
         description={formatLongDate(new Date())}
       />
+
+      {stats.data?.is_closed_day && (
+        <p className="flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-inset ring-amber-200">
+          <CalendarX className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          اليوم من أيام الإغلاق (لا يوجد دوام). يمكنك تغيير أيام الإغلاق من
+          الإعدادات.
+        </p>
+      )}
 
       {/* ------------------------- الإجراءات السريعة ------------------------ */}
       <div className="grid grid-cols-2 gap-3">

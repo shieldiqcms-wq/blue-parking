@@ -66,7 +66,7 @@ begin
             ((public.amman_today() - i)::text || ' 14:30')::timestamp at time zone 'Asia/Amman',
             v_owner);
 
-    -- زيارة متأخرة: 10:00 -> 16:10  (1 + 2 = 3 د.أ)
+    -- زيارة متأخرة: 10:00 -> 16:10  (1 أساسي + 2 ساعة بعد الثالثة = 3 د.أ)
     insert into public.parking_sessions
       (vehicle_id, session_type, entry_time, exit_time, pricing_rule_id,
        amount_due, payment_status, payment_method, notes, created_by)

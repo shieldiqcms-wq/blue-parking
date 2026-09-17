@@ -38,6 +38,8 @@ export interface PricingInput {
   rounding_mode: RoundingMode
   grace_minutes: number
   charge_before_start: boolean
+  /** أيام الإغلاق: 0=الأحد … 5=الجمعة, 6=السبت */
+  closed_days: number[]
 }
 
 function validatePricing(input: PricingInput): void {
@@ -54,6 +56,12 @@ function validatePricing(input: PricingInput): void {
   }
   if (input.grace_minutes < 0 || input.grace_minutes > 240) {
     throw new AppError('فترة السماح يجب أن تكون بين 0 و 240 دقيقة')
+  }
+  if (input.closed_days.some((d) => d < 0 || d > 6)) {
+    throw new AppError('أيام الإغلاق غير صحيحة')
+  }
+  if (input.closed_days.length >= 7) {
+    throw new AppError('لا يمكن إغلاق الموقف كل أيام الأسبوع')
   }
 }
 
@@ -80,6 +88,7 @@ export async function updatePricingRule(
       rounding_mode: input.rounding_mode,
       grace_minutes: Math.round(input.grace_minutes),
       charge_before_start: input.charge_before_start,
+      closed_days: [...input.closed_days].sort((a, b) => a - b),
     })
     .eq('id', id)
     .select()

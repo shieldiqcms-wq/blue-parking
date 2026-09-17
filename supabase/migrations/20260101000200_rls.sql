@@ -147,6 +147,7 @@ grant execute on function public.normalize_plate(text)                        to
 grant execute on function public.amman_date(timestamptz)                      to authenticated;
 grant execute on function public.amman_today()                                to authenticated;
 grant execute on function public.active_pricing_rule()                        to authenticated;
+grant execute on function public.is_closed_day(date)                          to authenticated;
 grant execute on function public.active_subscription_for(uuid, date)          to authenticated;
 grant execute on function public.calculate_parking_fee(timestamptz, timestamptz, uuid) to authenticated;
 grant execute on function public.lookup_plate(text)                           to authenticated;

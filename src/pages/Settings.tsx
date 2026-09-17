@@ -12,7 +12,7 @@ import {
   type PricingInput,
 } from '@/services/settings'
 import { toArabicError } from '@/lib/errors'
-import { formatMoney } from '@/lib/format'
+import { formatMoney, WEEKDAY_SHORT } from '@/lib/format'
 import { APP_NAME, CURRENCY, TIMEZONE } from '@/lib/env'
 import {
   Button,
@@ -25,6 +25,7 @@ import {
   PageHeading,
   Select,
 } from '@/components/ui'
+import { cx } from '@/lib/cx'
 import type { RoundingMode } from '@/types/database'
 
 export function SettingsPage() {
@@ -117,31 +118,34 @@ function PricingForm({
   rule: import('@/types/database').PricingRule
   onSaved: () => void
 }) {
-  const [form, setForm] = useState<PricingInput>({
-    name: rule.name,
-    base_amount: Number(rule.base_amount),
-    base_start_time: rule.base_start_time.slice(0, 5),
-    base_end_time: rule.base_end_time.slice(0, 5),
-    extra_hour_amount: Number(rule.extra_hour_amount),
-    rounding_mode: rule.rounding_mode,
-    grace_minutes: rule.grace_minutes,
-    charge_before_start: rule.charge_before_start,
+  const toForm = (r: import('@/types/database').PricingRule): PricingInput => ({
+    name: r.name,
+    base_amount: Number(r.base_amount),
+    base_start_time: r.base_start_time.slice(0, 5),
+    base_end_time: r.base_end_time.slice(0, 5),
+    extra_hour_amount: Number(r.extra_hour_amount),
+    rounding_mode: r.rounding_mode,
+    grace_minutes: r.grace_minutes,
+    charge_before_start: r.charge_before_start,
+    closed_days: r.closed_days ?? [],
   })
+
+  const [form, setForm] = useState<PricingInput>(() => toForm(rule))
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    setForm({
-      name: rule.name,
-      base_amount: Number(rule.base_amount),
-      base_start_time: rule.base_start_time.slice(0, 5),
-      base_end_time: rule.base_end_time.slice(0, 5),
-      extra_hour_amount: Number(rule.extra_hour_amount),
-      rounding_mode: rule.rounding_mode,
-      grace_minutes: rule.grace_minutes,
-      charge_before_start: rule.charge_before_start,
-    })
+    setForm(toForm(rule))
   }, [rule])
+
+  const toggleClosedDay = (day: number) => {
+    setForm((current) => ({
+      ...current,
+      closed_days: current.closed_days.includes(day)
+        ? current.closed_days.filter((d) => d !== day)
+        : [...current.closed_days, day].sort((a, b) => a - b),
+    }))
+  }
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -286,23 +290,66 @@ function PricingForm({
           <span className="text-sm text-slate-700">
             احتساب زيادة على الدخول قبل بداية الدوام
             <span className="mt-0.5 block text-xs text-slate-500">
-              معطّل افتراضياً — المبلغ الأساسي يغطي الدخول المبكر
+              المبلغ الأساسي يغطي فقط من دخل داخل فترة الدوام
             </span>
           </span>
         </label>
+
+        {/* --------------------------- أيام الإغلاق --------------------------- */}
+        <Field
+          label="أيام الإغلاق"
+          hint="الأيام التي لا يوجد فيها دوام — يظهر تنبيه إذا سجّلت دخولاً فيها"
+        >
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
+            {WEEKDAY_SHORT.map((label, day) => {
+              const closed = form.closed_days.includes(day)
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggleClosedDay(day)}
+                  aria-pressed={closed}
+                  className={cx(
+                    'h-11 rounded-xl border-2 text-xs font-bold transition',
+                    closed
+                      ? 'border-rose-500 bg-rose-500 text-white'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                  )}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            {form.closed_days.length === 0
+              ? 'الموقف يعمل كل أيام الأسبوع'
+              : `مغلق: ${form.closed_days.map((d) => WEEKDAY_SHORT[d]).join(' و ')}`}
+          </p>
+        </Field>
 
         {/* ------------------------- شرح الحساب ------------------------- */}
         <div className="rounded-xl bg-brand-50 px-3.5 py-3 text-xs leading-6 text-brand-900">
           <p className="font-bold">كيف يُحسب المبلغ؟</p>
           <ul className="mt-1.5 list-disc space-y-0.5 ps-5">
             <li>
-              خروج قبل أو عند{' '}
-              <span className="num font-semibold">{form.base_end_time}</span> ={' '}
+              دخول وخروج داخل{' '}
+              <span className="num font-semibold">
+                {form.base_start_time}–{form.base_end_time}
+              </span>{' '}
+              ={' '}
               <span className="num font-semibold">
                 {formatMoney(form.base_amount)}
               </span>{' '}
               {CURRENCY}
             </li>
+            {form.grace_minutes > 0 && (
+              <li>
+                سماح <span className="num font-semibold">{form.grace_minutes}</span>{' '}
+                دقيقة بعد{' '}
+                <span className="num">{form.base_end_time}</span> بلا رسوم إضافية
+              </li>
+            )}
             <li>
               بعد ذلك:{' '}
               <span className="num font-semibold">
@@ -313,10 +360,16 @@ function PricingForm({
                 ? 'عن كل ساعة أو جزء منها'
                 : 'لكل ساعة بالحساب الدقيق'}
             </li>
-            <li>
-              نهاية الدوام تُحسب على تاريخ الدخول — السيارة التي تبيت في الموقف
-              تُحاسب على كل الساعات
-            </li>
+            {form.charge_before_start && (
+              <li>
+                الدخول قبل{' '}
+                <span className="num">{form.base_start_time}</span> يُحاسب أيضاً:{' '}
+                <span className="num font-semibold">
+                  {formatMoney(form.extra_hour_amount)}
+                </span>{' '}
+                {CURRENCY} عن كل ساعة أو جزء منها قبل بداية الدوام
+              </li>
+            )}
             <li>السيارات المشتركة شهرياً لا تُحتسب عليها أي رسوم</li>
           </ul>
         </div>

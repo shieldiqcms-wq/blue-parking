@@ -7,7 +7,51 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- 0. دوال مساعدة عامة
+-- 0. فحص أولي — يمنع رسائل خطأ مبهمة إذا كانت القاعدة تحتوي جداول قديمة
+-- ----------------------------------------------------------------------------
+-- ملاحظة: `create table if not exists` يتخطّى الإنشاء إذا وُجد جدول بنفس
+-- الاسم، فيبقى الجدول القديم بأعمدته القديمة ويفشل أول فهرس يعتمد على عمود
+-- غير موجود. هذا الفحص يحوّل ذلك إلى رسالة واضحة.
+do $$
+declare
+  v_conflicts text[] := '{}';
+  r record;
+begin
+  for r in
+    select * from (values
+      ('profiles',         'role'),
+      ('vehicles',         'plate_normalized'),
+      ('subscriptions',    'vehicle_id'),
+      ('pricing_rules',    'base_amount'),
+      ('parking_sessions', 'session_type'),
+      ('payments',         'session_id'),
+      ('ocr_captures',     'detected_plate'),
+      ('app_settings',     'key')
+    ) t(tbl, required_column)
+  loop
+    if to_regclass('public.' || quote_ident(r.tbl)) is not null
+       and not exists (
+         select 1 from information_schema.columns
+         where table_schema = 'public'
+           and table_name = r.tbl
+           and column_name = r.required_column
+       )
+    then
+      v_conflicts := v_conflicts || r.tbl;
+    end if;
+  end loop;
+
+  if array_length(v_conflicts, 1) > 0 then
+    raise exception
+      E'يوجد جدول/جداول قديمة بنفس الأسماء لكن ببنية مختلفة: %\n'
+      'شغّل supabase/sql/00_inspect.sql لمراجعتها، ثم supabase/sql/01_reset.sql لحذفها، '
+      'ثم أعد تشغيل هذا الملف.',
+      array_to_string(v_conflicts, ', ');
+  end if;
+end $$;
+
+-- ----------------------------------------------------------------------------
+-- 0b. دوال مساعدة عامة
 -- ----------------------------------------------------------------------------
 
 -- تحديث updated_at تلقائياً
@@ -113,15 +157,21 @@ set search_path = public
 as $$
 declare
   v_owner_exists boolean;
+  v_role         text;
 begin
   select exists (select 1 from public.profiles where role = 'owner')
     into v_owner_exists;
 
+  v_role := case when v_owner_exists then 'pending' else 'owner' end;
+
   insert into public.profiles (id, full_name, role)
   values (
     new.id,
-    coalesce(nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''), 'أبو حمدان'),
-    case when v_owner_exists then 'pending' else 'owner' end
+    coalesce(
+      nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
+      case when v_role = 'owner' then 'أبو حمدان' else 'مستخدم' end
+    ),
+    v_role
   )
   on conflict (id) do nothing;
 
@@ -235,10 +285,15 @@ create table if not exists public.pricing_rules (
   rounding_mode      text not null default 'ceil_hour',
 
   -- فترة سماح بالدقائق بعد نهاية الدوام قبل بدء احتساب الزيادة
-  grace_minutes      integer not null default 0,
+  grace_minutes      integer not null default 15,
 
-  -- هل تُحتسب زيادة على الدخول قبل بداية الدوام؟ (افتراضياً: لا)
-  charge_before_start boolean not null default false,
+  -- هل تُحتسب زيادة على الدخول قبل بداية الدوام؟
+  -- المعتمد: نعم — المبلغ الأساسي يغطي فقط من دخل داخل فترة الدوام
+  charge_before_start boolean not null default true,
+
+  -- أيام الإغلاق حسب ترقيم PostgreSQL: 0=الأحد … 5=الجمعة, 6=السبت
+  -- المعتمد: لا يوجد دوام الجمعة والسبت
+  closed_days        smallint[] not null default '{5,6}',
 
   is_active          boolean not null default true,
   created_by         uuid references auth.users(id) on delete set null default auth.uid(),
@@ -254,7 +309,12 @@ create table if not exists public.pricing_rules (
   constraint pricing_grace_valid
     check (grace_minutes between 0 and 240),
   constraint pricing_name_not_blank
-    check (length(btrim(name)) > 0)
+    check (length(btrim(name)) > 0),
+  constraint pricing_closed_days_valid
+    check (
+      closed_days <@ array[0,1,2,3,4,5,6]::smallint[]
+      and array_length(closed_days, 1) is distinct from 7
+    )
 );
 
 comment on table public.pricing_rules is
@@ -441,13 +501,13 @@ create trigger app_settings_set_updated_at
 insert into public.pricing_rules (
   name, base_amount, base_start_time, base_end_time,
   extra_hour_amount, rounding_mode, grace_minutes,
-  charge_before_start, is_active, created_by
+  charge_before_start, closed_days, is_active, created_by
 )
 select
   'التسعيرة الأساسية',
   1.00, '08:00', '15:00',
-  1.00, 'ceil_hour', 0,
-  false, true, null
+  1.00, 'ceil_hour', 15,
+  true, '{5,6}'::smallint[], true, null
 where not exists (select 1 from public.pricing_rules);
 
 insert into public.app_settings (key, value, description, updated_by)
@@ -457,3 +517,43 @@ values
   ('timezone',     '"Asia/Amman"'::jsonb,      'المنطقة الزمنية المعتمدة في الحسابات', null),
   ('contact_phone','""'::jsonb,                'رقم تواصل يظهر في التقارير', null)
 on conflict (key) do nothing;
+
+-- ----------------------------------------------------------------------------
+-- 10. تعيين المالك للحسابات الموجودة مسبقاً
+-- ----------------------------------------------------------------------------
+-- الـ trigger أعلاه يعمل على الحسابات الجديدة فقط. إذا كان حساب أبو حمدان
+-- أُنشئ قبل تشغيل هذا الملف فلن يكون له ملف شخصي — نعوّض ذلك هنا.
+--
+-- القاعدة: أقدم حساب في المشروع يصبح المالك، وأي حساب آخر يأخذ pending.
+insert into public.profiles (id, full_name, role)
+select
+  u.id,
+  coalesce(
+    nullif(trim(u.raw_user_meta_data ->> 'full_name'), ''),
+    case when u.created_at = (select min(created_at) from auth.users)
+         then 'أبو حمدان' else 'مستخدم' end
+  ),
+  case when u.created_at = (select min(created_at) from auth.users)
+       then 'owner' else 'pending' end
+from auth.users u
+where not exists (select 1 from public.profiles p where p.id = u.id)
+on conflict (id) do nothing;
+
+-- تقرير نهائي: من هو المالك؟
+do $$
+declare
+  v_owner text;
+  v_count int;
+begin
+  select count(*) into v_count from public.profiles where role = 'owner';
+
+  if v_count = 0 then
+    raise notice 'لا يوجد حساب مالك بعد. أنشئ حساب أبو حمدان من Authentication > Users '
+                 'وسيصبح المالك تلقائياً.';
+  else
+    select u.email into v_owner
+    from public.profiles p join auth.users u on u.id = p.id
+    where p.role = 'owner' limit 1;
+    raise notice 'حساب المالك: %  (عدد حسابات المالك: %)', v_owner, v_count;
+  end if;
+end $$;

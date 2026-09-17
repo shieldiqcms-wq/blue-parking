@@ -124,6 +124,8 @@ export interface PricingRule {
   rounding_mode: RoundingMode
   grace_minutes: number
   charge_before_start: boolean
+  /** أيام الإغلاق: 0=الأحد … 5=الجمعة, 6=السبت */
+  closed_days: number[]
   is_active: boolean
   created_by: string | null
   created_at: string
@@ -148,6 +150,7 @@ export interface LookupPlateResult {
   vehicle: Vehicle | null
   subscription: Subscription | null
   active_session: ParkingSession | null
+  is_closed_day: boolean
 }
 
 export interface RegisterEntryResult {
@@ -175,6 +178,7 @@ export interface RegisterExitResult {
 
 export interface DashboardStats {
   today: string
+  is_closed_day: boolean
   cars_inside: number
   entries_today: number
   exits_today: number

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
+  CalendarX,
   Camera,
   CarFront,
   CheckCircle2,
@@ -334,6 +335,14 @@ export function EntryPage() {
                   <Badge tone="blue">زيارة عادية</Badge>
                 )}
               </header>
+
+              {lookup.is_closed_day && (
+                <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900">
+                  <CalendarX className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  اليوم من أيام الإغلاق حسب الإعدادات. يمكنك المتابعة، لكن
+                  تأكّد أن الموقف يعمل فعلاً اليوم.
+                </p>
+              )}
 
               {!lookup.found && (
                 <p className="flex items-start gap-2 rounded-xl bg-brand-50 px-3 py-2.5 text-sm text-brand-800">
