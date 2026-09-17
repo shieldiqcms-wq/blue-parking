@@ -3,10 +3,10 @@ import { loadEnv } from './env'
 
 const result = loadEnv()
 
-/** أسماء المتغيرات الناقصة — تُعرض للمستخدم في شاشة الإعداد */
-export const missingEnvVars = result.missing
+/** مشاكل الإعداد — تُعرض للمستخدم في شاشة الإعداد */
+export const envProblems = result.problems
 
-/** هل الإعداد مكتمل؟ */
+/** هل الإعداد مكتمل وصحيح؟ */
 export const isConfigured = result.ok
 
 function createStub(): SupabaseClient {

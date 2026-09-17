@@ -68,6 +68,17 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxx
 - `VITE_SUPABASE_URL` → Project Settings › Data API › Project URL
 - `VITE_SUPABASE_PUBLISHABLE_KEY` → Project Settings › API Keys › Publishable key
 
+> ⚠️ **الخطأ الأكثر شيوعاً:** نسخ الرابط من **شريط عنوان المتصفح** أثناء تصفّح
+> لوحة التحكم:
+>
+> | | |
+> |---|---|
+> | ❌ خطأ | `https://supabase.com/dashboard/project/xxxx` |
+> | ✅ صحيح | `https://xxxx.supabase.co` |
+>
+> رابط لوحة التحكم يُنتج **خطأ CORS غامض** عند تسجيل الدخول. لذلك يرفضه
+> التطبيق برسالة عربية واضحة، ويفشل الـ workflow قبل النشر.
+
 > ⚠️ **لا تضع** مفتاح `service_role` أو `secret` (`sb_secret_...`) أو كلمة مرور
 > قاعدة البيانات في أي ملف داخل المشروع. هذه المفاتيح **تتجاوز الحماية** وتعطي
 > صلاحية كاملة على البيانات. المفتاح العام (Publishable / anon) هو الوحيد
@@ -183,7 +194,13 @@ npm run db:push
 ### 3) النشر
 
 كل `push` على `main` يشغّل: `npm ci` → `lint` → `typecheck` → `build` → نشر.
-الـ workflow يفشل برسالة واضحة إذا كانت المتغيرات ناقصة.
+
+الـ workflow يفشل برسالة عربية واضحة إذا كانت المتغيرات ناقصة، أو إذا كان
+الرابط رابط لوحة تحكم، أو إذا وُضع مفتاح سري بالخطأ.
+
+> ⚠️ **مهم:** Vite يدمج متغيرات البيئة **وقت البناء**. تعديل قيمة في GitHub
+> لا يؤثر على نسخة منشورة سابقاً — لازم **إعادة تشغيل الـ workflow** بعد أي
+> تعديل: **Actions › Deploy to GitHub Pages › Run workflow**.
 
 الرابط: `https://<username>.github.io/blue-parking/`
 

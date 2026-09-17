@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { useAuth } from '@/hooks/useAuth'
-import { isConfigured, missingEnvVars } from '@/lib/supabase'
+import { envProblems, isConfigured } from '@/lib/supabase'
 import { LoadingBlock } from '@/components/ui'
 
 import { ActiveParkingPage } from '@/pages/ActiveParking'
@@ -18,7 +18,7 @@ import { VehiclesPage } from '@/pages/Vehicles'
 
 export function App() {
   if (!isConfigured) {
-    return <MissingConfigPage missing={missingEnvVars} />
+    return <MissingConfigPage problems={envProblems} />
   }
   return <AuthenticatedApp />
 }
