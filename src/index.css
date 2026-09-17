@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --header-h: 3.5rem;
+    --bottomnav-h: 4.25rem;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-slate-100 text-slate-900 font-sans antialiased;
+    margin: 0;
+    overscroll-behavior-y: none;
+  }
+
+  /* الأرقام تبقى لاتينية وواضحة حتى داخل النص العربي */
+  .num {
+    font-family: theme('fontFamily.numeric');
+    font-variant-numeric: tabular-nums;
+    direction: ltr;
+    unicode-bidi: isolate;
+    display: inline-block;
+  }
+
+  /* حقول الإدخال الرقمية تُكتب من اليسار لليمين */
+  input[type='number'],
+  input[type='tel'],
+  input[type='date'],
+  input[type='time'],
+  input[inputmode='numeric'] {
+    direction: ltr;
+    text-align: right;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-300;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+}
+
+@layer components {
+  .boot-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    height: 100vh;
+    font-family: 'Noto Kufi Arabic', Tahoma, sans-serif;
+    color: #1e40af;
+    background: #f1f5f9;
+  }
+  .boot-logo {
+    font-size: 48px;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+}
