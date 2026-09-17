@@ -7,8 +7,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 // عند التطوير المحلي يبقى المسار "/".
 const REPO_BASE = '/blue-parking/'
 
-export default defineConfig(({ command }) => ({
-  base: command === 'build' ? REPO_BASE : '/',
+export default defineConfig(({ command, isPreview }) => ({
+  // البناء والمعاينة يستخدمان مسار GitHub Pages، وخادم التطوير يبقى على '/'.
+  // ملاحظة: `vite preview` يعمل بـ command='serve'، فبدون isPreview كانت
+  // المعاينة تُخدَم على '/' بينما الأصول مبنيّة على REPO_BASE فتفشل بـ 404.
+  base: command === 'build' || isPreview ? REPO_BASE : '/',
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

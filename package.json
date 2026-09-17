@@ -10,9 +10,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "preview": "vite preview",
-    "db:push": "supabase db push",
-    "db:reset": "supabase db reset",
-    "db:diff": "supabase db diff",
+    "db:push": "npx --yes supabase@2 db push",
+    "db:reset": "npx --yes supabase@2 db reset",
+    "db:diff": "npx --yes supabase@2 db diff",
     "db:bundle": "node scripts/bundle-sql.mjs"
   },
   "dependencies": {
@@ -35,7 +35,6 @@
     "eslint-plugin-react-refresh": "^0.4.12",
     "globals": "^15.10.0",
     "postcss": "^8.4.47",
-    "supabase": "^2.117.0",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.2",
     "typescript-eslint": "^8.8.0",
