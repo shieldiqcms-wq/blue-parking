@@ -168,6 +168,7 @@ comment on table public.profiles is
 
 create index if not exists profiles_role_idx on public.profiles(role);
 
+drop trigger if exists profiles_set_updated_at on public.profiles;
 create trigger profiles_set_updated_at
   before update on public.profiles
   for each row execute function public.tg_set_updated_at();
@@ -284,10 +285,12 @@ begin
 end;
 $$;
 
+drop trigger if exists vehicles_normalize on public.vehicles;
 create trigger vehicles_normalize
   before insert or update of plate_number on public.vehicles
   for each row execute function public.tg_vehicles_normalize();
 
+drop trigger if exists vehicles_set_updated_at on public.vehicles;
 create trigger vehicles_set_updated_at
   before update on public.vehicles
   for each row execute function public.tg_set_updated_at();
@@ -352,6 +355,7 @@ create unique index if not exists pricing_rules_single_active
   on public.pricing_rules((is_active))
   where is_active;
 
+drop trigger if exists pricing_rules_set_updated_at on public.pricing_rules;
 create trigger pricing_rules_set_updated_at
   before update on public.pricing_rules
   for each row execute function public.tg_set_updated_at();
@@ -391,6 +395,7 @@ create index if not exists subscriptions_active_vehicle_idx
   on public.subscriptions(vehicle_id, end_date desc)
   where status = 'active';
 
+drop trigger if exists subscriptions_set_updated_at on public.subscriptions;
 create trigger subscriptions_set_updated_at
   before update on public.subscriptions
   for each row execute function public.tg_set_updated_at();
@@ -454,6 +459,7 @@ create unique index if not exists parking_sessions_one_active_per_vehicle
   on public.parking_sessions(vehicle_id)
   where exit_time is null;
 
+drop trigger if exists parking_sessions_set_updated_at on public.parking_sessions;
 create trigger parking_sessions_set_updated_at
   before update on public.parking_sessions
   for each row execute function public.tg_set_updated_at();
@@ -518,6 +524,7 @@ create table if not exists public.app_settings (
 
 comment on table public.app_settings is 'إعدادات عامة للتطبيق بصيغة مفتاح/قيمة.';
 
+drop trigger if exists app_settings_set_updated_at on public.app_settings;
 create trigger app_settings_set_updated_at
   before update on public.app_settings
   for each row execute function public.tg_set_updated_at();
@@ -1425,7 +1432,8 @@ grant execute on function public.get_report(date, date) to authenticated;
 -- ============================================================================
 
 -- السيارات الموجودة حالياً
-create or replace view public.current_cars_inside
+drop view if exists public.current_cars_inside cascade;
+create view public.current_cars_inside
 with (security_invoker = true)
 as
 select
@@ -1445,7 +1453,8 @@ left join public.subscriptions sub on sub.id = s.subscription_id
 where s.exit_time is null;
 
 -- تفاصيل كل العمليات — تُستخدم في التقارير وتصدير CSV
-create or replace view public.session_details
+drop view if exists public.session_details cascade;
+create view public.session_details
 with (security_invoker = true)
 as
 select
@@ -1470,7 +1479,8 @@ from public.parking_sessions s
 join public.vehicles v on v.id = s.vehicle_id;
 
 -- حالة الاشتراكات محسوبة من التواريخ
-create or replace view public.subscription_status
+drop view if exists public.subscription_status cascade;
+create view public.subscription_status
 with (security_invoker = true)
 as
 select

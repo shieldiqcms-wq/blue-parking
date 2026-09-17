@@ -833,7 +833,8 @@ grant execute on function public.get_report(date, date) to authenticated;
 -- ============================================================================
 
 -- السيارات الموجودة حالياً
-create or replace view public.current_cars_inside
+drop view if exists public.current_cars_inside cascade;
+create view public.current_cars_inside
 with (security_invoker = true)
 as
 select
@@ -853,7 +854,8 @@ left join public.subscriptions sub on sub.id = s.subscription_id
 where s.exit_time is null;
 
 -- تفاصيل كل العمليات — تُستخدم في التقارير وتصدير CSV
-create or replace view public.session_details
+drop view if exists public.session_details cascade;
+create view public.session_details
 with (security_invoker = true)
 as
 select
@@ -878,7 +880,8 @@ from public.parking_sessions s
 join public.vehicles v on v.id = s.vehicle_id;
 
 -- حالة الاشتراكات محسوبة من التواريخ
-create or replace view public.subscription_status
+drop view if exists public.subscription_status cascade;
+create view public.subscription_status
 with (security_invoker = true)
 as
 select
