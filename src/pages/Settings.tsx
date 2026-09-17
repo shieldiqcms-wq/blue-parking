@@ -203,7 +203,7 @@ function PricingForm({
             label={`المبلغ الأساسي (${CURRENCY})`}
             htmlFor="p-base"
             required
-            hint="يغطي كامل فترة الدوام أعلاه"
+            hint="يغطي فترة الدوام أعلاه"
           >
             <Input
               id="p-base"

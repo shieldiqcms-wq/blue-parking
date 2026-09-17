@@ -7,6 +7,36 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
+-- 0) فحص أولي — هل النظام مثبّت أصلاً؟
+-- ----------------------------------------------------------------------------
+do $$
+declare
+  v_missing text[] := '{}';
+  r record;
+begin
+  for r in
+    select * from (values
+      ('profiles'), ('vehicles'), ('subscriptions'), ('pricing_rules'),
+      ('parking_sessions'), ('payments'), ('ocr_captures'), ('app_settings')
+    ) t(tbl)
+  loop
+    if to_regclass('public.' || quote_ident(r.tbl)) is null then
+      v_missing := v_missing || r.tbl;
+    end if;
+  end loop;
+
+  if array_length(v_missing, 1) > 0 then
+    raise exception
+      E'النظام غير مثبّت بعد — الجداول التالية غير موجودة: %\n'
+      'شغّل أولاً: supabase/sql/INSTALL.sql  (أو ملفات migrations الثلاثة بالترتيب)\n'
+      'ثم أعد تشغيل هذا الملف.',
+      array_to_string(v_missing, ', ');
+  end if;
+
+  raise notice 'النظام مثبّت — جارٍ الفحص…';
+end $$;
+
+-- ----------------------------------------------------------------------------
 -- 1) الجداول: RLS مفعّل + توجد سياسات
 -- ----------------------------------------------------------------------------
 select

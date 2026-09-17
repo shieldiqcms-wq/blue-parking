@@ -12,7 +12,8 @@
     "preview": "vite preview",
     "db:push": "supabase db push",
     "db:reset": "supabase db reset",
-    "db:diff": "supabase db diff"
+    "db:diff": "supabase db diff",
+    "db:bundle": "node scripts/bundle-sql.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
