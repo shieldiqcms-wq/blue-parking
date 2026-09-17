@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom'
 import {
   AlertCircle,
+  ArrowLeftRight,
   CalendarX,
   CarFront,
-  LogIn,
-  LogOut,
+  Droplets,
+  Receipt,
   Ticket,
   TrendingUp,
   Wallet,
@@ -53,25 +54,25 @@ export function DashboardPage() {
 
       {/* ------------------------- الإجراءات السريعة ------------------------ */}
       <div className="grid grid-cols-2 gap-3">
-        <Link to="/entry">
+        <Link to="/gate">
           <Button
             size="xl"
             block
-            icon={<LogIn className="h-6 w-6" aria-hidden />}
+            icon={<ArrowLeftRight className="h-6 w-6" aria-hidden />}
             className="h-24 flex-col gap-1.5 text-base sm:h-20 sm:flex-row sm:text-lg"
           >
-            دخول سيارة
+            دخول / خروج
           </Button>
         </Link>
-        <Link to="/exit">
+        <Link to="/cashbook">
           <Button
             size="xl"
-            variant="success"
+            variant="secondary"
             block
-            icon={<LogOut className="h-6 w-6" aria-hidden />}
+            icon={<Wallet className="h-6 w-6" aria-hidden />}
             className="h-24 flex-col gap-1.5 text-base sm:h-20 sm:flex-row sm:text-lg"
           >
-            خروج سيارة
+            الصندوق
           </Button>
         </Link>
       </div>
@@ -93,11 +94,12 @@ export function DashboardPage() {
               tone="blue"
             />
             <StatCard
-              label="إيرادات اليوم"
-              value={formatMoney(stats.data.revenue_today)}
+              label="صافي اليوم"
+              value={formatMoney(stats.data.net_today)}
               unit={CURRENCY}
               icon={<Wallet className="h-4 w-4" aria-hidden />}
-              tone="green"
+              tone={stats.data.net_today >= 0 ? 'green' : 'red'}
+              hint={`الدخل ${formatMoney(stats.data.revenue_today)} − مصاريف ${formatMoney(stats.data.expenses_today)}`}
             />
             <StatCard
               label="اشتراكات سارية"
@@ -137,19 +139,35 @@ export function DashboardPage() {
                 unit={CURRENCY}
               />
               <MiniStat
-                label="إجمالي السيارات"
-                value={stats.data.total_vehicles}
+                label="خصومات اليوم"
+                value={formatMoney(stats.data.discount_today)}
+                unit={CURRENCY}
               />
             </div>
           </Card>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard
-              label="إيرادات الأسبوع"
-              value={formatMoney(stats.data.revenue_week)}
+              label="وقوف اليوم"
+              value={formatMoney(stats.data.parking_today)}
               unit={CURRENCY}
-              icon={<TrendingUp className="h-4 w-4" aria-hidden />}
-              tone="green"
+              tone="blue"
+            />
+            <StatCard
+              label="خدمات اليوم"
+              value={formatMoney(stats.data.services_today)}
+              unit={CURRENCY}
+              icon={<Droplets className="h-4 w-4" aria-hidden />}
+              tone="blue"
+              hint={`${stats.data.services_count_today} خدمة`}
+            />
+            <StatCard
+              label="مصاريف اليوم"
+              value={formatMoney(stats.data.expenses_today)}
+              unit={CURRENCY}
+              icon={<Receipt className="h-4 w-4" aria-hidden />}
+              tone={stats.data.expenses_today > 0 ? 'red' : 'slate'}
+              hint={`${stats.data.expenses_count_today} مصروف`}
             />
             <StatCard
               label="إيرادات الشهر"
@@ -157,6 +175,7 @@ export function DashboardPage() {
               unit={CURRENCY}
               icon={<TrendingUp className="h-4 w-4" aria-hidden />}
               tone="green"
+              hint={`مصاريف ${formatMoney(stats.data.expenses_month)}`}
             />
           </div>
         </>
@@ -195,7 +214,7 @@ export function DashboardPage() {
             title="لا توجد عمليات بعد"
             description="ابدأ بتسجيل دخول أول سيارة"
             action={
-              <Link to="/entry">
+              <Link to="/gate">
                 <Button size="sm">دخول سيارة</Button>
               </Link>
             }
@@ -228,7 +247,7 @@ export function DashboardPage() {
                   ) : (
                     <>
                       <span className="num text-sm font-bold text-slate-700">
-                        {formatMoney(item.amount_due)}
+                        {formatMoney(item.amount_collected ?? item.amount_due)}
                       </span>
                       <Badge
                         tone={

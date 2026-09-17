@@ -1,14 +1,25 @@
 /**
- * تصدير CSV يفتح مباشرة في Excel بترميز عربي سليم.
+ * تصدير CSV يفتح مباشرة في Excel بأعمدة منفصلة وترميز عربي سليم.
  *
- * ملاحظتان تقنيتان:
- *  1) BOM في بداية الملف حتى يقرأ Excel الترميز UTF-8 بشكل صحيح.
- *  2) الفاصلة المنقوطة ( ; ) كفاصل حقول لأنها الفاصل الافتراضي
- *     في نسخ Excel العربية/الأوروبية.
+ * ثلاث نقاط تقنية تحلّ المشاكل الشائعة:
+ *
+ *  1) BOM في بداية الملف — بدونه يقرأ Excel الترميز خطأً فيظهر العربي رموزاً.
+ *
+ *  2) سطر التوجيه `sep=;` في أول الملف — هذا هو الحل لمشكلة «كل البيانات في
+ *     عمود واحد». Excel يستخدم فاصل القائمة المضبوط في نظام ويندوز، وهو
+ *     يختلف بين الأجهزة (فاصلة أو فاصلة منقوطة). سطر `sep=` يفرض على Excel
+ *     استخدام الفاصل الصحيح بغض النظر عن إعدادات الجهاز.
+ *
+ *  3) نهايات أسطر CRLF — المتوقعة في Excel على ويندوز.
+ *
+ * ملاحظة: `sep=;` خاص بـ Excel. البرامج الأخرى (Google Sheets, LibreOffice)
+ * قد تعرضه كصف أول — وهذا مقبول مقابل ضمان عمل Excel، وهو المستخدم فعلياً.
  */
 
 const BOM = '﻿'
 const SEPARATOR = ';'
+const SEP_DIRECTIVE = `sep=${SEPARATOR}`
+const EOL = '\r\n'
 
 function escapeCell(value: unknown): string {
   if (value === null || value === undefined) return ''
@@ -44,7 +55,7 @@ export function buildCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
   const body = rows.map((row) =>
     columns.map((c) => escapeCell(c.value(row))).join(SEPARATOR),
   )
-  return BOM + [head, ...body].join('\r\n')
+  return BOM + [SEP_DIRECTIVE, head, ...body].join(EOL) + EOL
 }
 
 export function downloadCsv(filename: string, content: string): void {

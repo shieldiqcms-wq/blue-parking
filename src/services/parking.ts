@@ -60,6 +60,12 @@ export interface ExitInput {
   paymentStatus: 'paid' | 'unpaid' | 'waived'
   paymentMethod?: PaymentMethod | null
   notes?: string | null
+  /**
+   * المبلغ المحصّل فعلاً. اتركه فارغاً لتحصيل الفاتورة كاملة.
+   * قاعدة البيانات ترفض أي مبلغ يتجاوز الفاتورة — الخصم فقط مسموح.
+   */
+  collectedAmount?: number | null
+  discountReason?: string | null
 }
 
 export async function registerExit(
@@ -71,6 +77,9 @@ export async function registerExit(
     p_payment_method:
       input.paymentStatus === 'paid' ? (input.paymentMethod ?? 'cash') : null,
     p_notes: input.notes?.trim() || null,
+    p_collected_amount:
+      input.paymentStatus === 'paid' ? (input.collectedAmount ?? null) : null,
+    p_discount_reason: input.discountReason?.trim() || null,
   })
 
   if (error) throw new AppError(toArabicError(error))
@@ -81,11 +90,13 @@ export async function settleSession(
   sessionId: string,
   paymentMethod: PaymentMethod = 'cash',
   notes?: string | null,
+  collectedAmount?: number | null,
 ): Promise<void> {
   const { error } = await supabase.rpc('settle_session', {
     p_session_id: sessionId,
     p_payment_method: paymentMethod,
     p_notes: notes?.trim() || null,
+    p_collected_amount: collectedAmount ?? null,
   })
   if (error) throw new AppError(toArabicError(error))
 }

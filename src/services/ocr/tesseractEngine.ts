@@ -1,3 +1,4 @@
+import { parseJordanianPlate } from './plateParser'
 import type { OcrEngine, OcrProgress, OcrResult } from './types'
 
 /**
@@ -17,6 +18,18 @@ type TesseractWorker = {
 }
 
 const ENGINE_NAME = 'tesseract.js'
+
+/**
+ * أوضاع تقسيم الصفحة التي نجرّبها بالترتيب.
+ *
+ * اللوحة الأردنية شكلان: سطران (رمز فوق ورقم تحت) وسطر واحد. لا يوجد وضع
+ * واحد يقرأ الشكلين، لذلك نجرّب أكثر من وضع ونأخذ أفضل نتيجة.
+ *
+ *  6  = كتلة نص موحّدة  → الأنسب للوحة ذات السطرين
+ *  7  = سطر واحد        → الأنسب للوحة ذات السطر الواحد
+ *  11 = نص متفرّق       → احتياطي عند ضعف الإضاءة
+ */
+const PAGE_SEG_MODES = ['6', '7', '11'] as const
 
 let workerPromise: Promise<TesseractWorker> | null = null
 
@@ -48,14 +61,6 @@ async function getWorker(
       },
     })) as unknown as TesseractWorker
 
-    // لوحات السيارات في الأردن رقمية بالكامل
-    await worker.setParameters({
-      tessedit_char_whitelist: '0123456789',
-      // 7 = سطر واحد، الأنسب للوحات
-      tessedit_pageseg_mode: '7',
-      preserve_interword_spaces: '1',
-    })
-
     return worker
   })()
 
@@ -67,33 +72,12 @@ async function getWorker(
   }
 }
 
-/** استخراج أفضل تخمين لرقم اللوحة من النص الخام */
-function extractPlate(rawText: string): string {
-  const digitGroups = rawText.match(/\d+/g) ?? []
-  if (digitGroups.length === 0) return ''
-
-  // لوحة أردنية نموذجية: رمز المنطقة (1–2 خانة) + الرقم (4–6 خانات)
-  const meaningful = digitGroups.filter((g) => g.length >= 2)
-  if (meaningful.length === 0) return ''
-
-  if (meaningful.length >= 2) {
-    const [first, second] = meaningful
-    if (first.length <= 2 && second.length >= 4) {
-      return `${first}-${second}`
-    }
-    if (second.length <= 2 && first.length >= 4) {
-      return `${second}-${first}`
-    }
-  }
-
-  const longest = meaningful.reduce((a, b) => (b.length > a.length ? b : a))
-  if (longest.length >= 6 && longest.length <= 8) {
-    // فصل رمز المنطقة عن الرقم
-    const split = longest.length - 5
-    return `${longest.slice(0, split)}-${longest.slice(split)}`
-  }
-
-  return longest
+interface Attempt {
+  rawText: string
+  plate: string
+  /** ثقة مركّبة: ثقة المحرك × ثقة بنية اللوحة */
+  score: number
+  engineConfidence: number
 }
 
 export const tesseractEngine: OcrEngine = {
@@ -107,17 +91,58 @@ export const tesseractEngine: OcrEngine = {
   async recognize(image, onProgress): Promise<OcrResult> {
     const worker = await getWorker(onProgress)
 
-    onProgress?.({ progress: 0.6, label: 'جارٍ قراءة اللوحة…' })
-    const { data } = await worker.recognize(image)
+    const attempts: Attempt[] = []
+
+    for (let i = 0; i < PAGE_SEG_MODES.length; i++) {
+      const mode = PAGE_SEG_MODES[i]
+
+      onProgress?.({
+        progress: 0.5 + (i / PAGE_SEG_MODES.length) * 0.45,
+        label: `جارٍ قراءة اللوحة… (محاولة ${i + 1} من ${PAGE_SEG_MODES.length})`,
+      })
+
+      await worker.setParameters({
+        // لوحات السيارات في الأردن رقمية بالكامل
+        tessedit_char_whitelist: '0123456789',
+        tessedit_pageseg_mode: mode,
+        preserve_interword_spaces: '1',
+      })
+
+      const { data } = await worker.recognize(image)
+      const rawText = (data.text ?? '').trim()
+      const engineConfidence = Math.max(
+        0,
+        Math.min(1, (data.confidence ?? 0) / 100),
+      )
+
+      const { plate, structureConfidence } = parseJordanianPlate(rawText)
+
+      attempts.push({
+        rawText,
+        plate,
+        engineConfidence,
+        score: plate ? engineConfidence * structureConfidence : 0,
+      })
+
+      // قراءة واضحة جداً — لا داعي لبقية المحاولات
+      if (plate && engineConfidence >= 0.85 && structureConfidence >= 0.9) {
+        break
+      }
+    }
+
     onProgress?.({ progress: 1, label: 'تمت القراءة' })
 
-    const rawText = (data.text ?? '').trim()
-    const confidence = Math.max(0, Math.min(1, (data.confidence ?? 0) / 100))
+    const best = attempts.reduce(
+      (a, b) => (b.score > a.score ? b : a),
+      attempts[0] ?? { rawText: '', plate: '', score: 0, engineConfidence: 0 },
+    )
 
     return {
-      rawText,
-      plate: extractPlate(rawText),
-      confidence,
+      rawText: best.rawText,
+      plate: best.plate,
+      // نعرض للمشغّل الثقة المركّبة لا ثقة المحرك وحدها — فقراءة أرقام
+      // بثقة عالية لكن بشكل غير منطقي للوحة لا تستحق ثقة عالية.
+      confidence: best.plate ? best.score : 0,
       engine: ENGINE_NAME,
     }
   },

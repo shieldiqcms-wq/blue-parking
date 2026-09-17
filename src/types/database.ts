@@ -76,6 +76,11 @@ export interface ParkingSession {
   pricing_rule_id: string | null
   subscription_id: string | null
   amount_due: number
+  /** المبلغ المحصّل فعلاً — null قبل الخروج أو إن كان غير مدفوع */
+  amount_collected: number | null
+  /** amount_collected − amount_due (سالب = خصم) */
+  adjustment: number
+  discount_reason: string | null
   payment_status: PaymentStatus
   payment_method: PaymentMethod | null
   notes: string | null
@@ -108,9 +113,14 @@ export interface SessionDetail {
   business_date: string
   duration_minutes: number | null
   amount_due: number
+  amount_collected: number | null
+  adjustment: number
+  discount_reason: string | null
   payment_status: PaymentStatus
   payment_method: PaymentMethod | null
   notes: string | null
+  vehicle_id: string
+  services_total: number
   created_at: string
 }
 
@@ -173,6 +183,8 @@ export interface RegisterExitResult {
   session: ParkingSession
   vehicle: Vehicle
   amount_due: number
+  amount_collected: number | null
+  adjustment: number
   payment_status: PaymentStatus
 }
 
@@ -184,10 +196,23 @@ export interface DashboardStats {
   exits_today: number
   one_time_today: number
   monthly_today: number
+  /** المحصّل من الوقوف اليوم */
+  parking_today: number
+  /** المحصّل من الخدمات اليوم */
+  services_today: number
+  /** المصاريف المدفوعة اليوم */
+  expenses_today: number
+  /** الوقوف + الخدمات */
   revenue_today: number
+  /** الإجمالي − المصاريف */
+  net_today: number
+  services_count_today: number
+  expenses_count_today: number
+  discount_today: number
   unpaid_today: number
   revenue_week: number
   revenue_month: number
+  expenses_month: number
   unpaid_total: number
   unpaid_count: number
   active_subscriptions: number
@@ -202,9 +227,21 @@ export interface ReportTotals {
   paid_count: number
   unpaid_count: number
   waived_count: number
-  revenue_paid: number
+  /** المحصّل من الوقوف */
+  parking_revenue: number
+  /** إجمالي ما تمت فوترته قبل الخصم */
+  billed_total: number
+  /** مجموع الخصومات */
+  discount_total: number
   unpaid_amount: number
-  total_due: number
+  services_count: number
+  services_revenue: number
+  expenses_count: number
+  expenses_total: number
+  /** الوقوف + الخدمات */
+  total_revenue: number
+  /** الإجمالي − المصاريف */
+  net_revenue: number
 }
 
 export interface ReportDay {
@@ -212,7 +249,9 @@ export interface ReportDay {
   sessions: number
   one_time: number
   monthly: number
-  revenue_paid: number
+  parking_revenue: number
+  services_revenue: number
+  expenses_total: number
   unpaid_amount: number
 }
 
@@ -221,4 +260,42 @@ export interface ReportResult {
   to: string
   totals: ReportTotals
   days: ReportDay[]
+}
+
+/* ------------------------------------------------------------------ */
+/* الخدمات الإضافية والمصاريف                                          */
+/* ------------------------------------------------------------------ */
+
+export type ServiceType = 'wipe' | 'wash' | 'other'
+export type ExpenseCategory =
+  | 'water'
+  | 'electricity'
+  | 'staff'
+  | 'maintenance'
+  | 'other'
+
+export interface ServiceRow {
+  id: string
+  service_type: ServiceType
+  amount: number
+  payment_status: 'unpaid' | 'paid' | 'waived'
+  payment_method: PaymentMethod | null
+  notes: string | null
+  performed_at: string
+  business_date: string
+  session_id: string | null
+  vehicle_id: string | null
+  plate_number: string | null
+  owner_name: string | null
+  created_at: string
+}
+
+export interface ExpenseRow {
+  id: string
+  category: ExpenseCategory
+  amount: number
+  notes: string | null
+  spent_at: string
+  business_date: string
+  created_at: string
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Camera, RefreshCw, X } from 'lucide-react'
+import { Camera, Image as ImageIcon, RefreshCw, X } from 'lucide-react'
 import { Button, Modal } from './ui'
+import { cx } from '@/lib/cx'
 import {
   getOcrEngine,
   logOcrAttempt,
@@ -106,10 +107,41 @@ export function PlateCamera({ open, onClose, onDetected }: PlateCameraProps) {
     setProgress({ progress: 0.02, label: 'جارٍ تجهيز الصورة…' })
 
     try {
-      const canvas = preprocessForOcr(video, video.videoWidth, video.videoHeight)
       const engine = getOcrEngine()
 
-      const result = await engine.recognize(canvas, (p) => setProgress(p))
+      // نجرّب الإطار كاملاً، ثم الجزء الأيمن وحده (بلا مربع «الأردن»).
+      // مربع الدولة ثابت على كل لوحة أردنية وحروفه تشوّش القراءة، لكن
+      // قصّه ليس مضموناً لأن موضع اللوحة داخل الإطار يختلف — لذلك
+      // نُجرّب الحالتين ونأخذ الأعلى ثقة.
+      const variants: Array<{ cropRight: boolean }> = [
+        { cropRight: false },
+        { cropRight: true },
+      ]
+
+      let best: Awaited<ReturnType<typeof engine.recognize>> | null = null
+
+      for (const variant of variants) {
+        const canvas = preprocessForOcr(
+          video,
+          video.videoWidth,
+          video.videoHeight,
+          variant,
+        )
+
+        const result = await engine.recognize(canvas, (p) => setProgress(p))
+
+        if (!best || result.confidence > best.confidence) best = result
+
+        // قراءة مقنعة — لا داعي للمحاولة الثانية
+        if (result.plate && result.confidence >= 0.7) break
+      }
+
+      const result = best ?? {
+        plate: '',
+        rawText: '',
+        confidence: 0,
+        engine: 'tesseract.js',
+      }
 
       void logOcrAttempt({
         detected: result.plate || result.rawText.slice(0, 64),
@@ -129,6 +161,68 @@ export function PlateCamera({ open, onClose, onDetected }: PlateCameraProps) {
       setProgress(null)
     }
   }, [onDetected, stopCamera])
+
+  /** قراءة لوحة من صورة مختارة من الجهاز */
+  const readFromFile = useCallback(
+    async (file: File) => {
+      setPhase('processing')
+      setError(null)
+      setProgress({ progress: 0.02, label: 'جارٍ تجهيز الصورة…' })
+
+      const url = URL.createObjectURL(file)
+
+      try {
+        const img = new Image()
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve()
+          img.onerror = () => reject(new Error('تعذّر فتح الصورة'))
+          img.src = url
+        })
+
+        const engine = getOcrEngine()
+        let best: Awaited<ReturnType<typeof engine.recognize>> | null = null
+
+        for (const variant of [{ cropRight: false }, { cropRight: true }]) {
+          const canvas = preprocessForOcr(
+            img,
+            img.naturalWidth,
+            img.naturalHeight,
+            variant,
+          )
+          const result = await engine.recognize(canvas, (p) => setProgress(p))
+          if (!best || result.confidence > best.confidence) best = result
+          if (result.plate && result.confidence >= 0.7) break
+        }
+
+        const result = best ?? {
+          plate: '',
+          rawText: '',
+          confidence: 0,
+          engine: 'tesseract.js',
+        }
+
+        void logOcrAttempt({
+          detected: result.plate || result.rawText.slice(0, 64),
+          corrected: '',
+          confidence: result.confidence,
+          engine: `${result.engine} (ملف)`,
+        })
+
+        stopCamera()
+        onDetected(result.plate, {
+          confidence: result.confidence,
+          raw: result.rawText,
+        })
+      } catch (err) {
+        setError(toArabicError(err))
+        setPhase(streamRef.current ? 'live' : 'error')
+        setProgress(null)
+      } finally {
+        URL.revokeObjectURL(url)
+      }
+    },
+    [onDetected, stopCamera],
+  )
 
   const processing = phase === 'processing'
 
@@ -201,12 +295,41 @@ export function PlateCamera({ open, onClose, onDetected }: PlateCameraProps) {
           )}
         </div>
 
-        <p className="rounded-xl bg-brand-50 px-3 py-2.5 text-xs leading-6 text-brand-800">
-          وجّه الكاميرا بحيث تكون اللوحة داخل الإطار المتقطّع وبإضاءة جيدة.
-          <br />
-          <strong>الرقم المقروء سيُعرض عليك للتأكيد قبل التسجيل</strong> — يمكنك
-          دائماً تعديله أو إدخاله يدوياً.
-        </p>
+        <div className="rounded-xl bg-brand-50 px-3 py-2.5 text-xs leading-6 text-brand-800">
+          <p className="font-semibold">للحصول على أفضل قراءة:</p>
+          <ul className="mt-1 list-disc space-y-0.5 ps-5">
+            <li>املأ الإطار المتقطّع بالأرقام فقط قدر الإمكان</li>
+            <li>اقترب حتى تصبح الأرقام كبيرة وواضحة</li>
+            <li>تجنّب الظل المباشر وانعكاس الشمس على اللوحة</li>
+            <li>أمسك الجهاز مستوياً — الميلان يصعّب القراءة</li>
+          </ul>
+          <p className="mt-2">
+            <strong>الرقم المقروء سيُعرض عليك للتأكيد قبل التسجيل</strong> —
+            يمكنك دائماً تعديله أو إدخاله يدوياً.
+          </p>
+        </div>
+
+        {/* اختيار صورة جاهزة — بديل عند تعذّر الكاميرا أو لصورة أوضح */}
+        <label
+          className={cx(
+            'flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50',
+            processing && 'pointer-events-none opacity-50',
+          )}
+        >
+          <ImageIcon className="h-4 w-4" aria-hidden />
+          اختيار صورة من الجهاز
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={processing}
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (file) void readFromFile(file)
+            }}
+          />
+        </label>
 
         {error && (
           <p

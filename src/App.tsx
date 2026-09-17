@@ -5,9 +5,9 @@ import { envProblems, isConfigured } from '@/lib/supabase'
 import { LoadingBlock } from '@/components/ui'
 
 import { ActiveParkingPage } from '@/pages/ActiveParking'
+import { CashbookPage } from '@/pages/Cashbook'
 import { DashboardPage } from '@/pages/Dashboard'
-import { EntryPage } from '@/pages/Entry'
-import { ExitPage } from '@/pages/Exit'
+import { GatePage } from '@/pages/Gate'
 import { LoginPage } from '@/pages/Login'
 import { MissingConfigPage } from '@/pages/MissingConfig'
 import { NoAccessPage } from '@/pages/NoAccess'
@@ -53,9 +53,12 @@ function AuthenticatedApp() {
       <Route path="/login" element={<Navigate to="/" replace />} />
       <Route element={<AppLayout />}>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/entry" element={<EntryPage />} />
-        <Route path="/exit" element={<ExitPage />} />
+        <Route path="/gate" element={<GatePage />} />
+        {/* المساران القديمان محفوظان: روابط أو إشارات مرجعية سابقة */}
+        <Route path="/entry" element={<Navigate to="/gate" replace />} />
+        <Route path="/exit" element={<Navigate to="/gate" replace />} />
         <Route path="/inside" element={<ActiveParkingPage />} />
+        <Route path="/cashbook" element={<CashbookPage />} />
         <Route path="/vehicles" element={<VehiclesPage />} />
         <Route path="/subscriptions" element={<SubscriptionsPage />} />
         <Route path="/reports" element={<ReportsPage />} />

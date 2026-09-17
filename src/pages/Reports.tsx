@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Download, FileSpreadsheet, Wallet } from 'lucide-react'
+import { Download, Droplets, FileSpreadsheet, Receipt, Wallet } from 'lucide-react'
 import { useAsync } from '@/hooks/useAsync'
 import { useToast } from '@/hooks/useToast'
 import { getReport } from '@/services/reports'
@@ -10,15 +10,22 @@ import {
   addDays,
   ammanToday,
   formatDate,
+  formatDateForCsv,
   formatDateTime,
+  formatDateTimeForCsv,
   formatDuration,
   formatMoney,
+  formatMoneyForCsv,
   startOfMonth,
   startOfWeek,
+  EXPENSE_CATEGORY_LABEL,
   PAYMENT_METHOD_LABEL,
   PAYMENT_STATUS_LABEL,
+  SERVICE_TYPE_LABEL,
   SESSION_TYPE_LABEL,
+  WEEKDAY_SHORT,
 } from '@/lib/format'
+import { listExpenses, listServices } from '@/services/extras'
 import { displayPlate } from '@/lib/plate'
 import { CURRENCY } from '@/lib/env'
 import {
@@ -77,6 +84,8 @@ export function ReportsPage() {
   )
 
   const report = useAsync(() => getReport(from, to), [from, to])
+  const services = useAsync(() => listServices({ from, to }), [from, to])
+  const expenses = useAsync(() => listExpenses({ from, to }), [from, to])
   const sessions = useAsync(
     () =>
       listSessions({
@@ -90,7 +99,7 @@ export function ReportsPage() {
 
   const handleSettle = async (row: SessionDetail) => {
     try {
-      await settleSession(row.id, 'cash')
+      await settleSession(row.id, 'cash', null, row.amount_due)
       toast.success('تم تسجيل الدفع')
       await Promise.all([report.reload(), sessions.reload()])
     } catch (error) {
@@ -105,20 +114,44 @@ export function ReportsPage() {
     }
 
     const columns: CsvColumn<SessionDetail>[] = [
+      { header: 'التاريخ', value: (r) => r.business_date },
       { header: 'رقم اللوحة', value: (r) => r.plate_number },
       { header: 'اسم المالك', value: (r) => r.owner_name ?? '' },
       { header: 'رقم الهاتف', value: (r) => r.phone ?? '' },
       { header: 'نوع الزيارة', value: (r) => SESSION_TYPE_LABEL[r.session_type] },
-      { header: 'وقت الدخول', value: (r) => formatDateTime(r.entry_time) },
+      { header: 'وقت الدخول', value: (r) => formatDateTimeForCsv(r.entry_time) },
       {
         header: 'وقت الخروج',
-        value: (r) => (r.exit_time ? formatDateTime(r.exit_time) : 'ما زالت داخل الموقف'),
+        value: (r) =>
+          r.exit_time ? formatDateTimeForCsv(r.exit_time) : 'ما زالت داخل الموقف',
+      },
+      {
+        header: 'المدة بالدقائق',
+        value: (r) => (r.duration_minutes === null ? '' : r.duration_minutes),
       },
       {
         header: 'المدة',
-        value: (r) => (r.duration_minutes === null ? '' : formatDuration(r.duration_minutes)),
+        value: (r) =>
+          r.duration_minutes === null ? '' : formatDuration(r.duration_minutes),
       },
-      { header: `المبلغ (${CURRENCY})`, value: (r) => formatMoney(r.amount_due) },
+      {
+        header: `المستحق (${CURRENCY})`,
+        value: (r) => formatMoneyForCsv(r.amount_due),
+      },
+      {
+        header: `المحصّل (${CURRENCY})`,
+        value: (r) =>
+          r.amount_collected === null ? '' : formatMoneyForCsv(r.amount_collected),
+      },
+      {
+        header: `الخصم (${CURRENCY})`,
+        value: (r) => formatMoneyForCsv(r.adjustment < 0 ? -r.adjustment : 0),
+      },
+      { header: 'سبب الخصم', value: (r) => r.discount_reason ?? '' },
+      {
+        header: `خدمات مرتبطة (${CURRENCY})`,
+        value: (r) => formatMoneyForCsv(r.services_total),
+      },
       {
         header: 'حالة الدفع',
         value: (r) => PAYMENT_STATUS_LABEL[r.payment_status],
@@ -128,7 +161,6 @@ export function ReportsPage() {
         value: (r) =>
           r.payment_method ? PAYMENT_METHOD_LABEL[r.payment_method] : '',
       },
-      { header: 'التاريخ', value: (r) => r.business_date },
       { header: 'ملاحظات', value: (r) => r.notes ?? '' },
     ]
 
@@ -143,15 +175,77 @@ export function ReportsPage() {
     }
 
     exportCsv(`blue-parking-daily-${from}_${to}.csv`, report.data.days, [
-      { header: 'التاريخ', value: (d) => d.day },
+      { header: 'التاريخ', value: (d) => formatDateForCsv(d.day) },
       { header: 'عدد العمليات', value: (d) => d.sessions },
       { header: 'زيارات عادية', value: (d) => d.one_time },
       { header: 'زيارات اشتراك', value: (d) => d.monthly },
-      { header: `المحصّل (${CURRENCY})`, value: (d) => formatMoney(d.revenue_paid) },
+      {
+        header: `وقوف (${CURRENCY})`,
+        value: (d) => formatMoneyForCsv(d.parking_revenue),
+      },
+      {
+        header: `خدمات (${CURRENCY})`,
+        value: (d) => formatMoneyForCsv(d.services_revenue),
+      },
+      {
+        header: `إجمالي الدخل (${CURRENCY})`,
+        value: (d) => formatMoneyForCsv(d.parking_revenue + d.services_revenue),
+      },
+      {
+        header: `مصاريف (${CURRENCY})`,
+        value: (d) => formatMoneyForCsv(d.expenses_total),
+      },
+      {
+        header: `الصافي (${CURRENCY})`,
+        value: (d) =>
+          formatMoneyForCsv(
+            d.parking_revenue + d.services_revenue - d.expenses_total,
+          ),
+      },
       {
         header: `غير المدفوع (${CURRENCY})`,
-        value: (d) => formatMoney(d.unpaid_amount),
+        value: (d) => formatMoneyForCsv(d.unpaid_amount),
       },
+    ])
+    toast.success('تم تصدير الملف')
+  }
+
+  const exportServices = () => {
+    if (!services.data || services.data.length === 0) {
+      toast.warning('لا توجد خدمات للتصدير')
+      return
+    }
+    exportCsv(`blue-parking-services-${from}_${to}.csv`, services.data, [
+      { header: 'التاريخ', value: (r) => r.business_date },
+      { header: 'الوقت', value: (r) => formatDateTimeForCsv(r.performed_at) },
+      { header: 'نوع الخدمة', value: (r) => SERVICE_TYPE_LABEL[r.service_type] },
+      { header: 'رقم اللوحة', value: (r) => r.plate_number ?? '' },
+      { header: 'اسم المالك', value: (r) => r.owner_name ?? '' },
+      { header: `القيمة (${CURRENCY})`, value: (r) => formatMoneyForCsv(r.amount) },
+      {
+        header: 'حالة الدفع',
+        value: (r) => PAYMENT_STATUS_LABEL[r.payment_status],
+      },
+      {
+        header: 'طريقة الدفع',
+        value: (r) => (r.payment_method ? PAYMENT_METHOD_LABEL[r.payment_method] : ''),
+      },
+      { header: 'ملاحظات', value: (r) => r.notes ?? '' },
+    ])
+    toast.success('تم تصدير الملف')
+  }
+
+  const exportExpenses = () => {
+    if (!expenses.data || expenses.data.length === 0) {
+      toast.warning('لا توجد مصاريف للتصدير')
+      return
+    }
+    exportCsv(`blue-parking-expenses-${from}_${to}.csv`, expenses.data, [
+      { header: 'التاريخ', value: (r) => r.business_date },
+      { header: 'الوقت', value: (r) => formatDateTimeForCsv(r.spent_at) },
+      { header: 'النوع', value: (r) => EXPENSE_CATEGORY_LABEL[r.category] },
+      { header: `القيمة (${CURRENCY})`, value: (r) => formatMoneyForCsv(r.amount) },
+      { header: 'البيان', value: (r) => r.notes ?? '' },
     ])
     toast.success('تم تصدير الملف')
   }
@@ -160,7 +254,11 @@ export function ReportsPage() {
     <div className="flex flex-col gap-4">
       <PageHeading
         title="التقارير"
-        description={`من ${formatDate(from)} إلى ${formatDate(to)}`}
+        description={
+          from === to
+            ? `يوم ${formatDate(from)}`
+            : `الفترة من ${formatDate(from)} إلى ${formatDate(to)}`
+        }
       />
 
       {/* -------------------------- اختيار الفترة -------------------------- */}
@@ -219,17 +317,39 @@ export function ReportsPage() {
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard
-              label="عدد العمليات"
-              value={report.data.totals.sessions}
-              tone="blue"
-            />
-            <StatCard
-              label="المحصّل"
-              value={formatMoney(report.data.totals.revenue_paid)}
+              label="صافي الدخل"
+              value={formatMoney(report.data.totals.net_revenue)}
               unit={CURRENCY}
               icon={<Wallet className="h-4 w-4" aria-hidden />}
-              tone="green"
+              tone={report.data.totals.net_revenue >= 0 ? 'green' : 'red'}
+              hint="الدخل − المصاريف"
             />
+            <StatCard
+              label="وقوف"
+              value={formatMoney(report.data.totals.parking_revenue)}
+              unit={CURRENCY}
+              tone="blue"
+              hint={`${report.data.totals.sessions} عملية`}
+            />
+            <StatCard
+              label="خدمات"
+              value={formatMoney(report.data.totals.services_revenue)}
+              unit={CURRENCY}
+              icon={<Droplets className="h-4 w-4" aria-hidden />}
+              tone="blue"
+              hint={`${report.data.totals.services_count} خدمة`}
+            />
+            <StatCard
+              label="مصاريف"
+              value={formatMoney(report.data.totals.expenses_total)}
+              unit={CURRENCY}
+              icon={<Receipt className="h-4 w-4" aria-hidden />}
+              tone={report.data.totals.expenses_total > 0 ? 'red' : 'slate'}
+              hint={`${report.data.totals.expenses_count} مصروف`}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             <StatCard
               label="غير المدفوع"
               value={formatMoney(report.data.totals.unpaid_amount)}
@@ -238,10 +358,24 @@ export function ReportsPage() {
               hint={`${report.data.totals.unpaid_count} عملية`}
             />
             <StatCard
+              label="الخصومات"
+              value={formatMoney(report.data.totals.discount_total)}
+              unit={CURRENCY}
+              tone={report.data.totals.discount_total > 0 ? 'amber' : 'slate'}
+              hint={`من أصل ${formatMoney(report.data.totals.billed_total)}`}
+            />
+            <StatCard
               label="زيارات الاشتراكات"
               value={report.data.totals.monthly}
               tone="violet"
               hint={`${report.data.totals.one_time} زيارة عادية`}
+            />
+            <StatCard
+              label="إجمالي الدخل"
+              value={formatMoney(report.data.totals.total_revenue)}
+              unit={CURRENCY}
+              tone="green"
+              hint="وقوف + خدمات"
             />
           </div>
 
@@ -270,10 +404,10 @@ export function ReportsPage() {
                   <tr>
                     <th className="px-4 py-2.5 text-start font-semibold">اليوم</th>
                     <th className="px-4 py-2.5 text-start font-semibold">العمليات</th>
-                    <th className="px-4 py-2.5 text-start font-semibold">عادية</th>
-                    <th className="px-4 py-2.5 text-start font-semibold">اشتراك</th>
-                    <th className="px-4 py-2.5 text-start font-semibold">المحصّل</th>
-                    <th className="px-4 py-2.5 text-start font-semibold">غير مدفوع</th>
+                    <th className="px-4 py-2.5 text-start font-semibold">وقوف</th>
+                    <th className="px-4 py-2.5 text-start font-semibold">خدمات</th>
+                    <th className="px-4 py-2.5 text-start font-semibold">مصاريف</th>
+                    <th className="px-4 py-2.5 text-start font-semibold">الصافي</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -282,22 +416,33 @@ export function ReportsPage() {
                       key={day.day}
                       className={cx(day.sessions === 0 && 'text-slate-400')}
                     >
-                      <td className="num whitespace-nowrap px-4 py-2.5 font-medium">
-                        {formatDate(day.day)}
+                      <td className="whitespace-nowrap px-4 py-2.5 font-medium">
+                        <span className="num">{formatDate(day.day)}</span>
+                        <span className="ms-1.5 text-xs text-slate-400">
+                          {WEEKDAY_SHORT[new Date(day.day).getUTCDay()]}
+                        </span>
                       </td>
                       <td className="num px-4 py-2.5">{day.sessions}</td>
-                      <td className="num px-4 py-2.5">{day.one_time}</td>
-                      <td className="num px-4 py-2.5">{day.monthly}</td>
-                      <td className="num px-4 py-2.5 font-semibold text-emerald-700">
-                        {formatMoney(day.revenue_paid)}
+                      <td className="num px-4 py-2.5">
+                        {formatMoney(day.parking_revenue)}
+                      </td>
+                      <td className="num px-4 py-2.5 text-sky-700">
+                        {formatMoney(day.services_revenue)}
                       </td>
                       <td
                         className={cx(
                           'num px-4 py-2.5',
-                          day.unpaid_amount > 0 && 'font-semibold text-rose-600',
+                          day.expenses_total > 0 && 'text-rose-600',
                         )}
                       >
-                        {formatMoney(day.unpaid_amount)}
+                        {formatMoney(day.expenses_total)}
+                      </td>
+                      <td className="num px-4 py-2.5 font-semibold text-emerald-700">
+                        {formatMoney(
+                          day.parking_revenue +
+                            day.services_revenue -
+                            day.expenses_total,
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -309,16 +454,16 @@ export function ReportsPage() {
                       {report.data.totals.sessions}
                     </td>
                     <td className="num px-4 py-2.5">
-                      {report.data.totals.one_time}
+                      {formatMoney(report.data.totals.parking_revenue)}
                     </td>
-                    <td className="num px-4 py-2.5">
-                      {report.data.totals.monthly}
-                    </td>
-                    <td className="num px-4 py-2.5 text-emerald-700">
-                      {formatMoney(report.data.totals.revenue_paid)}
+                    <td className="num px-4 py-2.5 text-sky-700">
+                      {formatMoney(report.data.totals.services_revenue)}
                     </td>
                     <td className="num px-4 py-2.5 text-rose-600">
-                      {formatMoney(report.data.totals.unpaid_amount)}
+                      {formatMoney(report.data.totals.expenses_total)}
+                    </td>
+                    <td className="num px-4 py-2.5 text-emerald-700">
+                      {formatMoney(report.data.totals.net_revenue)}
                     </td>
                   </tr>
                 </tfoot>
@@ -327,6 +472,34 @@ export function ReportsPage() {
           </Card>
         </>
       )}
+
+      {/* --------------------- تصدير الخدمات والمصاريف --------------------- */}
+      <Card>
+        <CardTitle>تصدير إضافي</CardTitle>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button
+            variant="secondary"
+            onClick={exportServices}
+            icon={<Droplets className="h-4 w-4" aria-hidden />}
+          >
+            تصدير الخدمات
+            {services.data ? ` (${services.data.length})` : ''}
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={exportExpenses}
+            icon={<Receipt className="h-4 w-4" aria-hidden />}
+          >
+            تصدير المصاريف
+            {expenses.data ? ` (${expenses.data.length})` : ''}
+          </Button>
+        </div>
+        <p className="mt-3 text-xs leading-6 text-slate-500">
+          كل ملف يُفتح في Excel بأعمدة منفصلة وترميز عربي سليم. التواريخ بصيغة
+          <span className="num"> YYYY-MM-DD </span>
+          حتى يتعرّف عليها Excel ويمكن فرزها.
+        </p>
+      </Card>
 
       {/* ----------------------------- العمليات ----------------------------- */}
       <Card padded={false}>
@@ -417,8 +590,14 @@ export function ReportsPage() {
                     ) : (
                       <>
                         <span className="num text-sm font-bold text-slate-800">
-                          {formatMoney(row.amount_due)} {CURRENCY}
+                          {formatMoney(row.amount_collected ?? row.amount_due)}{' '}
+                          {CURRENCY}
                         </span>
+                        {row.adjustment < 0 && (
+                          <Badge tone="amber">
+                            خصم {formatMoney(-row.adjustment)}
+                          </Badge>
+                        )}
                         <Badge
                           tone={
                             row.payment_status === 'paid'

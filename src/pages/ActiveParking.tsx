@@ -76,7 +76,7 @@ export function ActiveParkingPage() {
             }
             action={
               !search ? (
-                <Link to="/entry">
+                <Link to="/gate">
                   <Button size="sm">دخول سيارة</Button>
                 </Link>
               ) : undefined
@@ -142,7 +142,7 @@ export function ActiveParkingPage() {
                       size="lg"
                       variant="success"
                       onClick={() =>
-                        navigate('/exit', {
+                        navigate('/gate', {
                           state: { sessionId: car.session_id },
                         })
                       }

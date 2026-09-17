@@ -97,6 +97,51 @@ export function minutesSince(value: string | Date): number {
   return Math.max(0, Math.round((Date.now() - d.getTime()) / 60000))
 }
 
+/* ------------------------- تنسيق خاص بتصدير CSV ------------------------- */
+
+const csvDateTimeFmt = new Intl.DateTimeFormat('en-CA', {
+  timeZone: TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+
+/**
+ * تاريخ ووقت بصيغة `YYYY-MM-DD HH:mm` (24 ساعة).
+ *
+ * التنسيق العربي للعرض يحتوي علامات اتجاه خفية (U+200F) وصيغة 12 ساعة
+ * بـ «ص/م» — وكلاهما يمنع Excel من التعرّف على الخلية كتاريخ، فتبقى نصاً
+ * لا يمكن فرزه أو حسابه. هذه الصيغة يفهمها Excel مباشرة.
+ */
+export function formatDateTimeForCsv(
+  value: string | Date | null | undefined,
+): string {
+  const d = parse(value)
+  if (!d) return ''
+  // en-CA يعطي "2026-09-17, 22:58" — نزيل الفاصلة فقط
+  return csvDateTimeFmt.format(d).replace(',', '')
+}
+
+/** تاريخ فقط بصيغة `YYYY-MM-DD` — يفهمها Excel كتاريخ */
+export function formatDateForCsv(
+  value: string | Date | null | undefined,
+): string {
+  const d = parse(value)
+  return d ? ammanDateOf(d) : ''
+}
+
+/** مبلغ للتصدير — رقم صافٍ بلا رموز حتى يُحسب في Excel */
+export function formatMoneyForCsv(
+  value: number | string | null | undefined,
+): string {
+  const n = typeof value === 'string' ? Number(value) : value
+  if (n === null || n === undefined || Number.isNaN(n)) return '0.00'
+  return n.toFixed(2)
+}
+
 /** تاريخ اليوم بصيغة YYYY-MM-DD بتوقيت الأردن */
 export function ammanToday(): string {
   return ammanDateOf(new Date())
@@ -169,6 +214,20 @@ export const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
   expired: 'منتهي',
   upcoming: 'لم يبدأ',
   cancelled: 'ملغي',
+}
+
+export const SERVICE_TYPE_LABEL: Record<string, string> = {
+  wipe: 'تمسيح',
+  wash: 'غسيل',
+  other: 'خدمة أخرى',
+}
+
+export const EXPENSE_CATEGORY_LABEL: Record<string, string> = {
+  water: 'ماء',
+  electricity: 'كهرباء',
+  staff: 'موظف مساعد',
+  maintenance: 'صيانة',
+  other: 'أخرى',
 }
 
 export const WEEKDAY_SHORT = [

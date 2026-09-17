@@ -3,10 +3,10 @@ import {
   Car,
   CarFront,
   LayoutDashboard,
-  LogIn,
-  LogOut,
   Settings,
   Ticket,
+  Wallet,
+  ArrowLeftRight,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -20,9 +20,9 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'الرئيسية', icon: LayoutDashboard, primary: true },
-  { to: '/entry', label: 'دخول سيارة', icon: LogIn, primary: true },
-  { to: '/exit', label: 'خروج سيارة', icon: LogOut, primary: true },
+  { to: '/gate', label: 'دخول / خروج', icon: ArrowLeftRight, primary: true },
   { to: '/inside', label: 'السيارات الموجودة', icon: CarFront, primary: true },
+  { to: '/cashbook', label: 'الصندوق', icon: Wallet, primary: true },
   { to: '/vehicles', label: 'السيارات', icon: Car },
   { to: '/subscriptions', label: 'الاشتراكات', icon: Ticket },
   { to: '/reports', label: 'التقارير', icon: BarChart3 },
