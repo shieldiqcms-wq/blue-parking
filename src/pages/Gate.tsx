@@ -27,7 +27,7 @@ import {
   Textarea,
 } from '@/components/ui'
 import { cx } from '@/lib/cx'
-import { useAction } from '@/hooks/useAsync'
+import { useAction, useAsync } from '@/hooks/useAsync'
 import { useOnline } from '@/hooks/useOnline'
 import { useToast } from '@/hooks/useToast'
 import {
@@ -47,6 +47,7 @@ import {
   PAYMENT_METHOD_LABEL,
   SERVICE_TYPE_LABEL,
 } from '@/lib/format'
+import { getActivePricingRule } from '@/services/settings'
 import { CURRENCY } from '@/lib/env'
 import type {
   LookupPlateResult,
@@ -55,6 +56,7 @@ import type {
   RegisterEntryResult,
   RegisterExitResult,
   ServiceRow,
+  ServiceType,
 } from '@/types/database'
 
 type Mode = 'search' | 'entry' | 'exit'
@@ -93,6 +95,14 @@ export function GatePage() {
   const [phone, setPhone] = useState('')
   const [entryNotes, setEntryNotes] = useState('')
 
+  // الدفع عند الدخول
+  const [payNow, setPayNow] = useState(false)
+  const [entryAmount, setEntryAmount] = useState('')
+  const [entryMethod, setEntryMethod] = useState<PaymentMethod>('cash')
+  const [addWash, setAddWash] = useState(false)
+  const [washType, setWashType] = useState<ServiceType>('wash')
+  const [washAmount, setWashAmount] = useState('')
+
   // بيانات الخروج
   const [preview, setPreview] = useState<PreviewExitResult | null>(null)
   const [services, setServices] = useState<ServiceRow[]>([])
@@ -106,6 +116,10 @@ export function GatePage() {
   // النتيجة
   const [entryResult, setEntryResult] = useState<RegisterEntryResult | null>(null)
   const [exitResult, setExitResult] = useState<RegisterExitResult | null>(null)
+
+  // التسعيرة تُحمَّل مرة لاقتراح المبلغ الأساسي عند الدفع المسبق
+  const pricing = useAsync(getActivePricingRule, [])
+  const baseAmount = pricing.data ? Number(pricing.data.base_amount) : 1
 
   const lookupAction = useAction(lookupPlate)
   const entryAction = useAction(registerEntry)
@@ -125,7 +139,7 @@ export function GatePage() {
         if (!data) return
         setPreview(data)
         setPlate(data.vehicle.plate_number)
-        setCollected(formatMoney(data.amount_due))
+        setCollected(formatMoney(data.remaining_amount))
         setMode('exit')
         setServices(await listSessionServices(data.session.id).catch(() => []))
       })
@@ -183,6 +197,12 @@ export function GatePage() {
   const chooseEntry = () => {
     setMode('entry')
     setExitResult(null)
+    // المشترك شهرياً لا تُحتسب عليه رسوم وقوف
+    const monthlySub = Boolean(lookup?.subscription)
+    setPayNow(false)
+    setEntryAmount(monthlySub ? '' : formatMoney(baseAmount))
+    setAddWash(false)
+    setWashAmount('')
   }
 
   /* ------------------------------ اختيار خروج ---------------------------- */
@@ -192,7 +212,7 @@ export function GatePage() {
       const data = await previewAction.run(lookup.active_session.id)
       if (!data) return
       setPreview(data)
-      setCollected(formatMoney(data.amount_due))
+      setCollected(formatMoney(data.remaining_amount))
       setPayChoice('paid')
       setPayMethod('cash')
       setDiscountReason('')
@@ -207,12 +227,33 @@ export function GatePage() {
   const doEntry = async () => {
     if (!online) return toast.error('لا يوجد اتصال بالإنترنت')
 
+    const prepaid = Number(entryAmount)
+    const wash = Number(washAmount)
+
+    if (payNow) {
+      if (entryAmount.trim() === '' || Number.isNaN(prepaid) || prepaid <= 0) {
+        toast.error('أدخل المبلغ المدفوع عند الدخول')
+        return
+      }
+    }
+
+    if (addWash) {
+      if (washAmount.trim() === '' || Number.isNaN(wash) || wash <= 0) {
+        toast.error('أدخل قيمة الغسيل')
+        return
+      }
+    }
+
     try {
       const data = await entryAction.run({
         plate,
         ownerName: ownerName || null,
         phone: phone || null,
         notes: entryNotes || null,
+        prepaidAmount: payNow ? prepaid : null,
+        prepaidMethod: entryMethod,
+        serviceType: addWash ? washType : null,
+        serviceAmount: addWash ? wash : null,
       })
       if (!data) return
 
@@ -250,8 +291,8 @@ export function GatePage() {
         toast.error('المبلغ المحصّل لا يمكن أن يكون سالباً')
         return
       }
-      if (collectedNum > preview.amount_due) {
-        toast.error('المبلغ المحصّل لا يمكن أن يتجاوز المبلغ المستحق')
+      if (collectedNum > preview.remaining_amount) {
+        toast.error('المبلغ المحصّل لا يمكن أن يتجاوز المتبقّي')
         return
       }
     }
@@ -284,6 +325,10 @@ export function GatePage() {
     setOwnerName('')
     setPhone('')
     setEntryNotes('')
+    setPayNow(false)
+    setEntryAmount('')
+    setAddWash(false)
+    setWashAmount('')
     setExitNotes('')
     setCollected('')
     setDiscountReason('')
@@ -331,6 +376,42 @@ export function GatePage() {
           </Detail>
         </dl>
 
+        {(entryResult.prepaid_amount > 0 || entryResult.service) && (
+          <div className="mt-4 rounded-2xl bg-emerald-50 px-4 py-4">
+            <p className="text-sm font-semibold text-emerald-900">
+              المقبوض عند الدخول
+            </p>
+            <ul className="mt-2 flex flex-col gap-1 text-sm text-emerald-900">
+              {entryResult.prepaid_amount > 0 && (
+                <li className="flex items-center justify-between">
+                  <span>رسوم الوقوف</span>
+                  <span className="num font-bold">
+                    {formatMoney(entryResult.prepaid_amount)} {CURRENCY}
+                  </span>
+                </li>
+              )}
+              {entryResult.service && (
+                <li className="flex items-center justify-between">
+                  <span>{SERVICE_TYPE_LABEL[entryResult.service.service_type]}</span>
+                  <span className="num font-bold">
+                    {formatMoney(entryResult.service.amount)} {CURRENCY}
+                  </span>
+                </li>
+              )}
+              <li className="mt-1 flex items-center justify-between border-t border-emerald-200 pt-1.5 font-bold">
+                <span>الإجمالي</span>
+                <span className="num text-base">
+                  {formatMoney(
+                    entryResult.prepaid_amount +
+                      (entryResult.service ? Number(entryResult.service.amount) : 0),
+                  )}{' '}
+                  {CURRENCY}
+                </span>
+              </li>
+            </ul>
+          </div>
+        )}
+
         {entryResult.is_new_vehicle && (
           <p className="mt-4 rounded-xl bg-brand-50 px-3 py-2.5 text-sm text-brand-800">
             تمت إضافة هذه السيارة إلى السجل لأول مرة.
@@ -366,15 +447,34 @@ export function GatePage() {
             </span>
           </p>
 
+          {exitResult.prepaid_amount > 0 && (
+            <div className="mt-3 inline-flex flex-col gap-1 rounded-xl bg-white px-3 py-2 text-xs text-slate-700">
+              <span className="flex items-center justify-between gap-4">
+                <span>الرسوم الكاملة</span>
+                <span className="num font-semibold">
+                  {formatMoney(exitResult.amount_due)}
+                </span>
+              </span>
+              <span className="flex items-center justify-between gap-4 text-emerald-700">
+                <span>دُفع عند الدخول</span>
+                <span className="num font-semibold">
+                  {formatMoney(exitResult.prepaid_amount)}
+                </span>
+              </span>
+              <span className="flex items-center justify-between gap-4">
+                <span>حُصِّل عند الخروج</span>
+                <span className="num font-semibold">
+                  {formatMoney(exitResult.collected_now)}
+                </span>
+              </span>
+            </div>
+          )}
+
           {discount > 0 && (
             <p className="mt-2 text-sm text-amber-700">
-              الفاتورة{' '}
-              <span className="num font-semibold">
-                {formatMoney(exitResult.amount_due)}
-              </span>{' '}
-              — خصم{' '}
+              خصم{' '}
               <span className="num font-semibold">{formatMoney(discount)}</span>{' '}
-              {CURRENCY}
+              {CURRENCY} من الرسوم
             </p>
           )}
 
@@ -408,7 +508,8 @@ export function GatePage() {
   const activeSession = lookup?.active_session ?? null
   const isInside = Boolean(activeSession)
   const monthly = preview?.session.session_type === 'monthly'
-  const dueAmount = preview?.amount_due ?? 0
+  // الأساس هو المتبقّي بعد خصم ما دُفع عند الدخول
+  const dueAmount = preview?.remaining_amount ?? 0
   const collectedNum = Number(collected)
   const discountNow =
     !Number.isNaN(collectedNum) && collectedNum < dueAmount
@@ -610,6 +711,186 @@ export function GatePage() {
               </Field>
             </div>
 
+            {/* ------------------- الدفع عند الدخول ------------------- */}
+            <div className="rounded-xl border border-slate-200 p-3">
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-slate-700">
+                <Banknote className="h-4 w-4 text-emerald-600" aria-hidden />
+                تحصيل عند الدخول
+                <span className="font-normal text-slate-400">— اختياري</span>
+              </p>
+
+              {lookup?.subscription ? (
+                <p className="rounded-lg bg-violet-50 px-3 py-2.5 text-xs leading-6 text-violet-900">
+                  سيارة مشتركة شهرياً — لا تُحتسب عليها رسوم وقوف. يمكنك مع ذلك
+                  إضافة غسيل بالأسفل.
+                </p>
+              ) : (
+                <>
+                  <label className="flex items-start gap-2.5 rounded-lg bg-slate-50 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={payNow}
+                      onChange={(e) => setPayNow(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600"
+                    />
+                    <span className="text-sm text-slate-700">
+                      دفع رسوم الوقوف الآن
+                      <span className="mt-0.5 block text-xs text-slate-500">
+                        يُخصم من المستحق عند الخروج، والباقي فقط هو ما يُطلب
+                      </span>
+                    </span>
+                  </label>
+
+                  {payNow && (
+                    <div className="mt-3 flex flex-col gap-3">
+                      <Field label={`المبلغ (${CURRENCY})`} htmlFor="entry-amount">
+                        <div className="flex flex-col gap-2">
+                          <Input
+                            id="entry-amount"
+                            type="number"
+                            inputMode="decimal"
+                            min="0"
+                            step="0.25"
+                            value={entryAmount}
+                            onChange={(e) => setEntryAmount(e.target.value)}
+                            className="num h-14 text-center text-2xl font-bold"
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            {[baseAmount, baseAmount * 2, baseAmount * 3].map(
+                              (value) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() =>
+                                    setEntryAmount(formatMoney(value))
+                                  }
+                                  className={cx(
+                                    'num rounded-lg border px-3 py-1.5 text-sm font-semibold transition',
+                                    Number(entryAmount) === value
+                                      ? 'border-emerald-600 bg-emerald-600 text-white'
+                                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                                  )}
+                                >
+                                  {formatMoney(value)}
+                                </button>
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      </Field>
+
+                      <Field label="طريقة الدفع" htmlFor="entry-method">
+                        <Select
+                          id="entry-method"
+                          value={entryMethod}
+                          onChange={(e) =>
+                            setEntryMethod(e.target.value as PaymentMethod)
+                          }
+                        >
+                          {Object.entries(PAYMENT_METHOD_LABEL).map(
+                            ([value, label]) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ),
+                          )}
+                        </Select>
+                      </Field>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ------------------------ الغسيل ------------------------ */}
+              <label className="mt-3 flex items-start gap-2.5 rounded-lg bg-slate-50 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={addWash}
+                  onChange={(e) => setAddWash(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-600"
+                />
+                <span className="text-sm text-slate-700">
+                  إضافة غسيل أو تمسيح
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    يُحصَّل الآن ومنفصل عن رسوم الوقوف
+                  </span>
+                </span>
+              </label>
+
+              {addWash && (
+                <div className="mt-3 flex flex-col gap-3">
+                  <Field label="نوع الخدمة">
+                    <div className="grid grid-cols-3 gap-2">
+                      {(Object.keys(SERVICE_TYPE_LABEL) as ServiceType[]).map(
+                        (type) => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setWashType(type)}
+                            aria-pressed={washType === type}
+                            className={cx(
+                              'h-11 rounded-xl border-2 text-sm font-bold transition',
+                              washType === type
+                                ? 'border-sky-600 bg-sky-600 text-white'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                            )}
+                          >
+                            {SERVICE_TYPE_LABEL[type]}
+                          </button>
+                        ),
+                      )}
+                    </div>
+                  </Field>
+
+                  <Field label={`قيمة الخدمة (${CURRENCY})`} htmlFor="wash-amount">
+                    <div className="flex flex-col gap-2">
+                      <Input
+                        id="wash-amount"
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.25"
+                        value={washAmount}
+                        onChange={(e) => setWashAmount(e.target.value)}
+                        className="num h-14 text-center text-2xl font-bold"
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        {[0.5, 1, 1.5, 2, 3, 5].map((value) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setWashAmount(formatMoney(value))}
+                            className={cx(
+                              'num rounded-lg border px-3 py-1.5 text-sm font-semibold transition',
+                              Number(washAmount) === value
+                                ? 'border-sky-600 bg-sky-600 text-white'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                            )}
+                          >
+                            {formatMoney(value)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </Field>
+                </div>
+              )}
+
+              {/* ---------------------- إجمالي المقبوض ---------------------- */}
+              {(payNow || addWash) && (
+                <p className="mt-3 flex items-center justify-between rounded-lg bg-emerald-50 px-3 py-2.5 text-sm font-bold text-emerald-900">
+                  <span>إجمالي المقبوض الآن</span>
+                  <span className="num">
+                    {formatMoney(
+                      (payNow ? Number(entryAmount) || 0 : 0) +
+                        (addWash ? Number(washAmount) || 0 : 0),
+                    )}{' '}
+                    {CURRENCY}
+                  </span>
+                </p>
+              )}
+            </div>
+
             <Field label="ملاحظات" htmlFor="entry-notes">
               <Textarea
                 id="entry-notes"
@@ -688,21 +969,53 @@ export function GatePage() {
               )}
             >
               <p className="text-sm font-medium text-slate-600">
-                رسوم الوقوف المستحقة
+                {preview.prepaid_amount > 0
+                  ? 'المتبقّي للتحصيل'
+                  : 'رسوم الوقوف المستحقة'}
               </p>
               <p className="mt-1 flex items-baseline justify-center gap-2">
                 <span className="num text-4xl font-bold text-slate-900">
-                  {formatMoney(preview.amount_due)}
+                  {formatMoney(
+                    preview.prepaid_amount > 0
+                      ? preview.remaining_amount
+                      : preview.amount_due,
+                  )}
                 </span>
                 <span className="text-lg font-semibold text-slate-500">
                   {CURRENCY}
                 </span>
               </p>
+
+              {preview.prepaid_amount > 0 && (
+                <div className="mt-3 inline-flex flex-col gap-1 rounded-xl bg-white/70 px-3 py-2 text-xs text-slate-700">
+                  <span className="flex items-center justify-between gap-4">
+                    <span>الرسوم الكاملة</span>
+                    <span className="num font-semibold">
+                      {formatMoney(preview.amount_due)}
+                    </span>
+                  </span>
+                  <span className="flex items-center justify-between gap-4 text-emerald-700">
+                    <span>مدفوع عند الدخول</span>
+                    <span className="num font-semibold">
+                      − {formatMoney(preview.prepaid_amount)}
+                    </span>
+                  </span>
+                </div>
+              )}
+
               {monthly && (
                 <p className="mt-2 text-sm font-medium text-violet-800">
                   سيارة مشتركة شهرياً — لا تُحتسب رسوم زيارة
                 </p>
               )}
+
+              {!monthly &&
+                preview.prepaid_amount > 0 &&
+                preview.remaining_amount === 0 && (
+                  <p className="mt-2 text-sm font-semibold text-emerald-700">
+                    الرسوم مدفوعة بالكامل — لا يوجد مبلغ مستحق
+                  </p>
+                )}
             </div>
 
             {/* ---------------------- الخدمات ---------------------- */}
@@ -790,10 +1103,10 @@ export function GatePage() {
                 {payChoice === 'paid' && (
                   <>
                     <Field
-                      label={`المبلغ المحصّل (${CURRENCY})`}
+                      label={`المبلغ المحصّل الآن (${CURRENCY})`}
                       htmlFor="collected"
                       required
-                      hint="يمكن تخفيضه عند عدم توفّر صرافة — لا يمكن تجاوز المستحق"
+                      hint="يمكن تخفيضه عند عدم توفّر صرافة — لا يمكن تجاوز المتبقّي"
                     >
                       <div className="flex flex-col gap-2">
                         <Input
@@ -801,7 +1114,7 @@ export function GatePage() {
                           type="number"
                           inputMode="decimal"
                           min="0"
-                          max={preview.amount_due}
+                          max={preview.remaining_amount}
                           step="0.25"
                           value={collected}
                           onChange={(e) => setCollected(e.target.value)}
@@ -810,7 +1123,7 @@ export function GatePage() {
 
                         {/* اختصارات سريعة */}
                         <div className="flex flex-wrap gap-2">
-                          {quickAmounts(preview.amount_due).map((amount) => (
+                          {quickAmounts(preview.remaining_amount).map((amount) => (
                             <button
                               key={amount}
                               type="button"
@@ -838,7 +1151,7 @@ export function GatePage() {
                           </span>{' '}
                           {CURRENCY} من أصل{' '}
                           <span className="num">
-                            {formatMoney(preview.amount_due)}
+                            {formatMoney(preview.remaining_amount)}
                           </span>{' '}
                           — سيُسجَّل في التقارير
                         </p>

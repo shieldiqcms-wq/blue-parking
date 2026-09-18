@@ -2,6 +2,7 @@ import { supabase } from '@/lib/supabase'
 import { AppError, toArabicError } from '@/lib/errors'
 import { normalizePlate } from '@/lib/plate'
 import type {
+  ServiceType,
   CarInside,
   LookupPlateResult,
   PaymentMethod,
@@ -29,8 +30,21 @@ export interface EntryInput {
   ownerName?: string | null
   phone?: string | null
   notes?: string | null
+  /** تحصيل رسوم الوقوف كاملة أو جزئياً لحظة الدخول */
+  prepaidAmount?: number | null
+  prepaidMethod?: PaymentMethod | null
+  /** خدمة تُضاف في نفس العملية (غسيل/تمسيح) */
+  serviceType?: ServiceType | null
+  serviceAmount?: number | null
+  serviceNotes?: string | null
 }
 
+/**
+ * تسجيل الدخول — مع الدفع والخدمة اختيارياً في عملية واحدة.
+ *
+ * الثلاثة تتم داخل معاملة واحدة في قاعدة البيانات: إن فشل أي جزء لا
+ * يُسجَّل شيء، فلا تبقى سيارة داخل الموقف بلا قيد للمبلغ المقبوض.
+ */
 export async function registerEntry(
   input: EntryInput,
 ): Promise<RegisterEntryResult> {
@@ -41,6 +55,11 @@ export async function registerEntry(
     p_owner_name: input.ownerName?.trim() || null,
     p_phone: input.phone?.trim() || null,
     p_notes: input.notes?.trim() || null,
+    p_prepaid_amount: input.prepaidAmount ?? null,
+    p_prepaid_method: input.prepaidMethod ?? 'cash',
+    p_service_type: input.serviceType ?? null,
+    p_service_amount: input.serviceAmount ?? null,
+    p_service_notes: input.serviceNotes?.trim() || null,
   })
 
   if (error) throw new AppError(toArabicError(error))

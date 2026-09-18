@@ -76,6 +76,10 @@ export interface ParkingSession {
   pricing_rule_id: string | null
   subscription_id: string | null
   amount_due: number
+  /** ما دُفع من رسوم الوقوف لحظة الدخول */
+  prepaid_amount: number
+  prepaid_at: string | null
+  prepaid_method: PaymentMethod | null
   /** المبلغ المحصّل فعلاً — null قبل الخروج أو إن كان غير مدفوع */
   amount_collected: number | null
   /** amount_collected − amount_due (سالب = خصم) */
@@ -114,6 +118,7 @@ export interface SessionDetail {
   duration_minutes: number | null
   amount_due: number
   amount_collected: number | null
+  prepaid_amount: number
   adjustment: number
   discount_reason: string | null
   payment_status: PaymentStatus
@@ -168,13 +173,23 @@ export interface RegisterEntryResult {
   vehicle: Vehicle
   subscription: Subscription | null
   is_new_vehicle: boolean
+  /** ما حُصِّل لحظة الدخول */
+  prepaid_amount: number
+  /** الخدمة المضافة في نفس العملية، إن وُجدت */
+  service: ServiceRow | null
 }
 
 export interface PreviewExitResult {
   session: ParkingSession
   vehicle: Vehicle
   pricing_rule: PricingRule | null
+  /** رسوم الوقوف المحسوبة كاملة */
   amount_due: number
+  /** ما دُفع لحظة الدخول */
+  prepaid_amount: number
+  /** المطلوب تحصيله الآن = المستحق − المدفوع مقدماً */
+  remaining_amount: number
+  services_total: number
   estimated_exit: string
   duration_minutes: number
 }
@@ -183,6 +198,10 @@ export interface RegisterExitResult {
   session: ParkingSession
   vehicle: Vehicle
   amount_due: number
+  prepaid_amount: number
+  /** ما حُصِّل لحظة الخروج فقط */
+  collected_now: number
+  /** المدفوع مقدماً + المحصّل عند الخروج */
   amount_collected: number | null
   adjustment: number
   payment_status: PaymentStatus
@@ -202,6 +221,8 @@ export interface DashboardStats {
   services_today: number
   /** المصاريف المدفوعة اليوم */
   expenses_today: number
+  /** ما حُصِّل لحظة الدخول اليوم (جزء من parking_today) */
+  prepaid_today: number
   /** الوقوف + الخدمات */
   revenue_today: number
   /** الإجمالي − المصاريف */
@@ -227,8 +248,10 @@ export interface ReportTotals {
   paid_count: number
   unpaid_count: number
   waived_count: number
-  /** المحصّل من الوقوف */
+  /** المحصّل من الوقوف (حسب تاريخ قبض النقد) */
   parking_revenue: number
+  /** منه ما حُصِّل لحظة الدخول */
+  prepaid_total: number
   /** إجمالي ما تمت فوترته قبل الخصم */
   billed_total: number
   /** مجموع الخصومات */
