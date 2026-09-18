@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { AppError, toArabicError } from '@/lib/errors'
 import type {
+  CostCenter,
   ExpenseCategory,
   ExpenseRow,
   PaymentMethod,
@@ -96,6 +97,8 @@ export interface ExpenseInput {
   amount: number
   notes?: string | null
   spentAt?: string | null
+  /** على أي نشاط يُحمّل المصروف — افتراضياً مشترك */
+  costCenter?: CostCenter
 }
 
 export async function addExpense(input: ExpenseInput): Promise<ExpenseRow> {
@@ -108,6 +111,7 @@ export async function addExpense(input: ExpenseInput): Promise<ExpenseRow> {
     p_amount: input.amount,
     p_notes: input.notes?.trim() || null,
     p_spent_at: input.spentAt ?? null,
+    p_cost_center: input.costCenter ?? 'shared',
   })
 
   if (error) throw new AppError(toArabicError(error))
@@ -123,6 +127,7 @@ export interface ExpenseFilter {
   from?: string
   to?: string
   category?: string
+  costCenter?: string
   limit?: number
 }
 
@@ -138,6 +143,7 @@ export async function listExpenses(
   if (filter.from) query = query.gte('business_date', filter.from)
   if (filter.to) query = query.lte('business_date', filter.to)
   if (filter.category) query = query.eq('category', filter.category)
+  if (filter.costCenter) query = query.eq('cost_center', filter.costCenter)
 
   const { data, error } = await query
   if (error) throw new AppError(toArabicError(error))

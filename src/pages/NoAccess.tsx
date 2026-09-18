@@ -10,7 +10,7 @@ export function NoAccessPage() {
   const { session, profile, signOut, refreshProfile } = useAuth()
 
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-100 px-4 py-10">
+    <div className="grid min-h-screen place-items-center bg-sand-100 px-4 py-10">
       <Card className="w-full max-w-md text-center">
         <ShieldX className="mx-auto h-14 w-14 text-rose-500" aria-hidden />
 

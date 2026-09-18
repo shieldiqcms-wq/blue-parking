@@ -41,12 +41,13 @@ import {
   formatDate,
   formatMoney,
   formatTime,
+  COST_CENTER_LABEL,
   EXPENSE_CATEGORY_LABEL,
   SERVICE_TYPE_LABEL,
 } from '@/lib/format'
 import { displayPlate } from '@/lib/plate'
 import { CURRENCY } from '@/lib/env'
-import type { ExpenseCategory } from '@/types/database'
+import type { CostCenter, ExpenseCategory } from '@/types/database'
 
 const QUICK_EXPENSE = [0.5, 1, 2, 3, 5, 10]
 
@@ -191,8 +192,8 @@ export function CashbookPage() {
             className={cx(
               'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition',
               range === value
-                ? 'bg-brand-700 text-white'
-                : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50',
+                ? 'bg-brand-600 text-white shadow-sm'
+                : 'bg-white text-slate-600 ring-1 ring-sand-300 hover:bg-sand-50',
             )}
           >
             {label}
@@ -318,8 +319,21 @@ export function CashbookPage() {
                 className="flex items-center gap-3 px-4 py-3 sm:px-5"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-slate-800">
-                    {EXPENSE_CATEGORY_LABEL[e.category]}
+                  <p className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-bold text-slate-800">
+                      {EXPENSE_CATEGORY_LABEL[e.category]}
+                    </span>
+                    <Badge
+                      tone={
+                        e.cost_center === 'parking'
+                          ? 'blue'
+                          : e.cost_center === 'wash'
+                            ? 'sky'
+                            : 'slate'
+                      }
+                    >
+                      {COST_CENTER_LABEL[e.cost_center]}
+                    </Badge>
                   </p>
                   <p className="mt-0.5 text-xs text-slate-500">
                     {formatDate(e.spent_at)} · {formatTime(e.spent_at)}
@@ -386,6 +400,7 @@ function ExpenseDialog({
   onSaved: () => void | Promise<void>
 }) {
   const [category, setCategory] = useState<ExpenseCategory>('water')
+  const [costCenter, setCostCenter] = useState<CostCenter>('parking')
   const [amount, setAmount] = useState('')
   const [notes, setNotes] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -393,6 +408,7 @@ function ExpenseDialog({
 
   const reset = () => {
     setCategory('water')
+    setCostCenter('parking')
     setAmount('')
     setNotes('')
     setError(null)
@@ -408,7 +424,7 @@ function ExpenseDialog({
 
     setSaving(true)
     try {
-      await addExpense({ category, amount: value, notes })
+      await addExpense({ category, amount: value, notes, costCenter })
       reset()
       await onSaved()
     } catch (err) {
@@ -440,6 +456,35 @@ function ExpenseDialog({
       }
     >
       <div className="flex flex-col gap-4">
+        <Field
+          label="على أي نشاط؟"
+          required
+          hint="يحدّد على أي نشاط يُحمّل المصروف عند حساب الأرباح"
+        >
+          <div className="grid grid-cols-3 gap-2">
+            {(Object.keys(COST_CENTER_LABEL) as CostCenter[]).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setCostCenter(value)}
+                aria-pressed={costCenter === value}
+                className={cx(
+                  'h-14 rounded-xl border-2 px-1 text-xs font-bold leading-tight transition sm:text-sm',
+                  costCenter === value
+                    ? value === 'parking'
+                      ? 'border-brand-600 bg-brand-600 text-white'
+                      : value === 'wash'
+                        ? 'border-sky-600 bg-sky-600 text-white'
+                        : 'border-slate-500 bg-slate-500 text-white'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300',
+                )}
+              >
+                {COST_CENTER_LABEL[value]}
+              </button>
+            ))}
+          </div>
+        </Field>
+
         <Field label="نوع المصروف" required>
           <div className="grid grid-cols-3 gap-2">
             {(Object.keys(EXPENSE_CATEGORY_LABEL) as ExpenseCategory[]).map(

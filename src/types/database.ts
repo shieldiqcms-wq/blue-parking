@@ -243,6 +243,8 @@ export interface DashboardStats {
 
 export interface ReportTotals {
   sessions: number
+  /** عدد السيارات الداخلة في الفترة */
+  entries: number
   one_time: number
   monthly: number
   paid_count: number
@@ -261,14 +263,26 @@ export interface ReportTotals {
   services_revenue: number
   expenses_count: number
   expenses_total: number
+  /** مصاريف محمّلة على الموقف */
+  expenses_parking: number
+  /** مصاريف محمّلة على الغسيل */
+  expenses_wash: number
+  /** مصاريف مشتركة بين النشاطين */
+  expenses_shared: number
   /** الوقوف + الخدمات */
   total_revenue: number
   /** الإجمالي − المصاريف */
   net_revenue: number
+  /** دخل الوقوف − مصاريف الموقف (قبل المشترك) */
+  parking_net: number
+  /** دخل الخدمات − مصاريف الغسيل (قبل المشترك) */
+  wash_net: number
 }
 
 export interface ReportDay {
   day: string
+  /** عدد السيارات الداخلة في هذا اليوم */
+  entries: number
   sessions: number
   one_time: number
   monthly: number
@@ -283,6 +297,33 @@ export interface ReportResult {
   to: string
   totals: ReportTotals
   days: ReportDay[]
+}
+
+/* ------------------------------------------------------------------ */
+/* مقارنة الأسابيع                                                     */
+/* ------------------------------------------------------------------ */
+
+export interface WeeklyDay {
+  /** 0 = الأحد … 6 = السبت */
+  day_index: number
+  this_date: string
+  last_date: string
+  /** null للأيام التي لم تأتِ بعد */
+  this_count: number | null
+  last_count: number
+  this_revenue: number | null
+  last_revenue: number
+}
+
+export interface WeeklyComparison {
+  this_week_start: string
+  last_week_start: string
+  today: string
+  this_week_total: number
+  last_week_total: number
+  /** نفس عدد الأيام المنقضية من الأسبوع الماضي — للمقارنة العادلة */
+  last_week_same_period: number
+  days: WeeklyDay[]
 }
 
 /* ------------------------------------------------------------------ */
@@ -313,9 +354,13 @@ export interface ServiceRow {
   created_at: string
 }
 
+/** على أي نشاط يُحمّل المصروف */
+export type CostCenter = 'parking' | 'wash' | 'shared'
+
 export interface ExpenseRow {
   id: string
   category: ExpenseCategory
+  cost_center: CostCenter
   amount: number
   notes: string | null
   spent_at: string

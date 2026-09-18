@@ -33,14 +33,14 @@ export function AppLayout() {
   const userLabel = profile?.full_name || session?.user.email || 'المالك'
 
   return (
-    <div className="flex min-h-full flex-col bg-slate-100">
+    <div className="flex min-h-full flex-col bg-sand-100">
       {/* ------------------------------ الهيدر ------------------------------ */}
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur no-print">
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-3 sm:px-4">
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="rounded-lg p-2 text-slate-600 transition hover:bg-slate-100 lg:hidden"
+            className="rounded-lg p-2 text-slate-600 transition hover:bg-sand-100 lg:hidden"
             aria-label={menuOpen ? 'إغلاق القائمة' : 'فتح القائمة'}
             aria-expanded={menuOpen}
           >
@@ -145,7 +145,7 @@ export function AppLayout() {
                     'flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition',
                     isActive
                       ? 'bg-brand-700 text-white'
-                      : 'text-slate-600 hover:bg-slate-100',
+                      : 'text-slate-600 hover:bg-sand-100',
                   )
                 }
               >

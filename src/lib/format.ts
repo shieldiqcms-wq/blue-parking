@@ -133,6 +133,48 @@ export function formatDateForCsv(
   return d ? ammanDateOf(d) : ''
 }
 
+const ammanPartsFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+})
+
+/**
+ * يحوّل لحظة زمنية إلى تاريخ «ساعة حائط» بتوقيت الأردن، لاستخدامه في Excel.
+ *
+ * Excel لا يعرف المناطق الزمنية — يخزّن رقماً يمثّل ساعة حائط مجرّدة.
+ * فلو مرّرنا اللحظة كما هي لظهر التوقيت العالمي (أقل بثلاث ساعات).
+ * هنا نبني تاريخاً حقولُه بالتوقيت العالمي تساوي حقول التوقيت الأردني،
+ * فيقرأه Excel كما يراه المستخدم.
+ */
+export function toExcelDate(
+  value: string | Date | null | undefined,
+): Date | null {
+  const d = parse(value)
+  if (!d) return null
+
+  const parts: Record<string, string> = {}
+  for (const part of ammanPartsFmt.formatToParts(d)) {
+    if (part.type !== 'literal') parts[part.type] = part.value
+  }
+
+  return new Date(
+    Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour) % 24,
+      Number(parts.minute),
+      Number(parts.second),
+    ),
+  )
+}
+
 /** مبلغ للتصدير — رقم صافٍ بلا رموز حتى يُحسب في Excel */
 export function formatMoneyForCsv(
   value: number | string | null | undefined,
@@ -220,6 +262,12 @@ export const SERVICE_TYPE_LABEL: Record<string, string> = {
   wipe: 'تمسيح',
   wash: 'غسيل',
   other: 'خدمة أخرى',
+}
+
+export const COST_CENTER_LABEL: Record<string, string> = {
+  parking: 'الموقف',
+  wash: 'غسيل السيارات',
+  shared: 'مشترك',
 }
 
 export const EXPENSE_CATEGORY_LABEL: Record<string, string> = {

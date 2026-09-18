@@ -21,7 +21,7 @@
   }
 
   body {
-    @apply bg-slate-100 text-slate-900 font-sans antialiased;
+    @apply bg-sand-100 text-slate-800 font-sans antialiased;
     margin: 0;
     overscroll-behavior-y: none;
   }
@@ -70,8 +70,8 @@
     gap: 12px;
     height: 100vh;
     font-family: 'Noto Kufi Arabic', Tahoma, sans-serif;
-    color: #1e40af;
-    background: #f1f5f9;
+    color: #2d4b7c;
+    background: #f4f2ee;
   }
   .boot-logo {
     font-size: 48px;

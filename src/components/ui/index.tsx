@@ -221,18 +221,25 @@ export const Textarea = forwardRef<
 
 type BadgeTone =
   | 'blue'
+  | 'sky'
   | 'green'
   | 'red'
   | 'amber'
   | 'slate'
   | 'violet'
 
+/**
+ * درجات مخفّفة عمداً: خلفية فاتحة ونص داكن بدل ألوان مشبعة.
+ * الشاشة تُستخدم طوال اليوم، والألوان القوية تُتعب العين.
+ * `blue` للموقف و `sky` للغسيل — يميّزان النشاطين بلا صخب.
+ */
 const TONES: Record<BadgeTone, string> = {
   blue: 'bg-brand-50 text-brand-700 ring-brand-200',
+  sky: 'bg-sky-50 text-sky-700 ring-sky-200',
   green: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   red: 'bg-rose-50 text-rose-700 ring-rose-200',
   amber: 'bg-amber-50 text-amber-700 ring-amber-200',
-  slate: 'bg-slate-100 text-slate-600 ring-slate-200',
+  slate: 'bg-sand-200 text-slate-600 ring-sand-300',
   violet: 'bg-violet-50 text-violet-700 ring-violet-200',
 }
 

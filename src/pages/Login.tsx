@@ -21,7 +21,7 @@ export function LoginPage() {
 
   if (loading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-slate-100">
+      <div className="grid min-h-screen place-items-center bg-sand-100">
         <LoadingBlock label="جارٍ التحقق من الجلسة…" />
       </div>
     )

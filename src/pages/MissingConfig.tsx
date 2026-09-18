@@ -8,7 +8,7 @@ import { APP_NAME, type EnvProblem } from '@/lib/env'
  */
 export function MissingConfigPage({ problems }: { problems: EnvProblem[] }) {
   return (
-    <div className="grid min-h-screen place-items-center bg-slate-100 px-4 py-10">
+    <div className="grid min-h-screen place-items-center bg-sand-100 px-4 py-10">
       <Card className="w-full max-w-2xl">
         <div className="flex items-center gap-3">
           <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-100 text-amber-700">
@@ -81,9 +81,9 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...`}
             <ol className="mt-1.5 list-decimal space-y-1 ps-5 text-xs leading-6 text-slate-600">
               <li>
                 انسخ{' '}
-                <code className="rounded bg-slate-100 px-1">.env.example</code>{' '}
+                <code className="rounded bg-sand-100 px-1">.env.example</code>{' '}
                 إلى{' '}
-                <code className="rounded bg-slate-100 px-1">.env.local</code>
+                <code className="rounded bg-sand-100 px-1">.env.local</code>
               </li>
               <li>عبّي القيمتين</li>
               <li>أعد تشغيل خادم التطوير</li>

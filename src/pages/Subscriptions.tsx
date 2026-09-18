@@ -129,8 +129,8 @@ export function SubscriptionsPage() {
               className={cx(
                 'shrink-0 rounded-full px-4 py-2 text-sm font-semibold transition',
                 filter === value
-                  ? 'bg-brand-700 text-white'
-                  : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50',
+                  ? 'bg-brand-600 text-white shadow-sm'
+                  : 'bg-white text-slate-600 ring-1 ring-sand-300 hover:bg-sand-50',
               )}
             >
               {label}

@@ -1,11 +1,22 @@
 import { supabase } from '@/lib/supabase'
 import { AppError, toArabicError } from '@/lib/errors'
-import type { DashboardStats, ReportResult } from '@/types/database'
+import type {
+  DashboardStats,
+  ReportResult,
+  WeeklyComparison,
+} from '@/types/database'
 
 export async function getDashboard(): Promise<DashboardStats> {
   const { data, error } = await supabase.rpc('get_dashboard')
   if (error) throw new AppError(toArabicError(error))
   return data as DashboardStats
+}
+
+/** مقارنة السيارات الداخلة: هذا الأسبوع مقابل الأسبوع الماضي */
+export async function getWeeklyComparison(): Promise<WeeklyComparison> {
+  const { data, error } = await supabase.rpc('get_weekly_comparison')
+  if (error) throw new AppError(toArabicError(error))
+  return data as WeeklyComparison
 }
 
 export async function getReport(from: string, to: string): Promise<ReportResult> {
