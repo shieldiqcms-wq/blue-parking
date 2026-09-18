@@ -14,6 +14,7 @@ import { listExpenses, listServices } from '@/services/extras'
 import { exportXlsx, type SheetColumn } from '@/lib/xlsx'
 import { toArabicError } from '@/lib/errors'
 import { WeeklyChart } from '@/components/WeeklyChart'
+import { DailyTable } from '@/components/DailyTable'
 import {
   addDays,
   ammanToday,
@@ -216,7 +217,7 @@ export function ReportsPage() {
     try {
       exportXlsx(`blue-parking-${from}_${to}`, [
         {
-          name: 'الملخص اليومي',
+          name: 'الموقف',
           rows: daily,
           columns: [
             { header: 'التاريخ', value: (d) => toExcelDate(d.day), type: 'date', width: 13 },
@@ -228,33 +229,20 @@ export function ReportsPage() {
             { header: 'سيارات داخلة', value: (d) => d.entries, type: 'number', width: 13 },
             { header: 'عمليات مكتملة', value: (d) => d.sessions, type: 'number', width: 14 },
             {
-              header: `وقوف (${CURRENCY})`,
+              header: `الدخل (${CURRENCY})`,
               value: (d) => d.parking_revenue,
               type: 'money',
-              width: 13,
+              width: 14,
             },
             {
-              header: `خدمات (${CURRENCY})`,
-              value: (d) => d.services_revenue,
+              header: `المصاريف (${CURRENCY})`,
+              value: (d) => d.expenses_parking,
               type: 'money',
-              width: 13,
-            },
-            {
-              header: `إجمالي الدخل (${CURRENCY})`,
-              value: (d) => d.parking_revenue + d.services_revenue,
-              type: 'money',
-              width: 18,
-            },
-            {
-              header: `مصاريف (${CURRENCY})`,
-              value: (d) => d.expenses_total,
-              type: 'money',
-              width: 13,
+              width: 15,
             },
             {
               header: `الصافي (${CURRENCY})`,
-              value: (d) =>
-                d.parking_revenue + d.services_revenue - d.expenses_total,
+              value: (d) => d.parking_revenue - d.expenses_parking,
               type: 'money',
               width: 14,
             },
@@ -263,6 +251,86 @@ export function ReportsPage() {
               value: (d) => d.unpaid_amount,
               type: 'money',
               width: 16,
+            },
+          ],
+        },
+        {
+          name: 'غسيل السيارات',
+          rows: daily,
+          columns: [
+            { header: 'التاريخ', value: (d) => toExcelDate(d.day), type: 'date', width: 13 },
+            {
+              header: 'اليوم',
+              value: (d) => WEEKDAY_SHORT[new Date(d.day).getUTCDay()],
+              width: 11,
+            },
+            { header: 'عدد الخدمات', value: (d) => d.services_count, type: 'number', width: 13 },
+            {
+              header: `الدخل (${CURRENCY})`,
+              value: (d) => d.services_revenue,
+              type: 'money',
+              width: 14,
+            },
+            {
+              header: `المصاريف (${CURRENCY})`,
+              value: (d) => d.expenses_wash,
+              type: 'money',
+              width: 15,
+            },
+            {
+              header: `الصافي (${CURRENCY})`,
+              value: (d) => d.services_revenue - d.expenses_wash,
+              type: 'money',
+              width: 14,
+            },
+          ],
+        },
+        {
+          name: 'الملخص العام',
+          rows: daily,
+          columns: [
+            { header: 'التاريخ', value: (d) => toExcelDate(d.day), type: 'date', width: 13 },
+            {
+              header: 'اليوم',
+              value: (d) => WEEKDAY_SHORT[new Date(d.day).getUTCDay()],
+              width: 11,
+            },
+            {
+              header: `دخل الموقف (${CURRENCY})`,
+              value: (d) => d.parking_revenue,
+              type: 'money',
+              width: 16,
+            },
+            {
+              header: `دخل الغسيل (${CURRENCY})`,
+              value: (d) => d.services_revenue,
+              type: 'money',
+              width: 16,
+            },
+            {
+              header: `مصاريف الموقف (${CURRENCY})`,
+              value: (d) => d.expenses_parking,
+              type: 'money',
+              width: 18,
+            },
+            {
+              header: `مصاريف الغسيل (${CURRENCY})`,
+              value: (d) => d.expenses_wash,
+              type: 'money',
+              width: 18,
+            },
+            {
+              header: `مصاريف مشتركة (${CURRENCY})`,
+              value: (d) => d.expenses_shared,
+              type: 'money',
+              width: 18,
+            },
+            {
+              header: `الصافي (${CURRENCY})`,
+              value: (d) =>
+                d.parking_revenue + d.services_revenue - d.expenses_total,
+              type: 'money',
+              width: 14,
             },
           ],
         },
@@ -457,96 +525,112 @@ export function ReportsPage() {
             />
           </div>
 
-          {/* ------------------------ التوزيع اليومي ------------------------ */}
-          <Card padded={false}>
-            <div className="px-4 pt-4 sm:px-5">
-              <CardTitle>التوزيع اليومي</CardTitle>
-            </div>
+          {/* ---------------------- جدول الموقف ---------------------- */}
+          <DailyTable
+            title="الموقف"
+            subtitle="حركة الوقوف يوماً بيوم"
+            icon={<CarFront className="h-4 w-4 text-brand-600" aria-hidden />}
+            rows={report.data?.days ?? []}
+            isEmptyRow={(d) =>
+              d.entries === 0 && d.parking_revenue === 0 && d.expenses_parking === 0
+            }
+            columns={[
+              { header: 'سيارات', value: (d) => d.entries, dimZero: true },
+              { header: 'الدخل', value: (d) => formatMoney(d.parking_revenue) },
+              {
+                header: 'المصاريف',
+                value: (d) => formatMoney(d.expenses_parking),
+                tone: 'negative',
+              },
+              {
+                header: 'الصافي',
+                value: (d) =>
+                  formatMoney(d.parking_revenue - d.expenses_parking),
+                tone: 'positive',
+              },
+              {
+                header: 'غير مدفوع',
+                value: (d) => formatMoney(d.unpaid_amount),
+                tone: 'negative',
+              },
+            ]}
+            totals={[
+              totals.entries,
+              formatMoney(totals.parking_revenue),
+              formatMoney(totals.expenses_parking),
+              formatMoney(totals.parking_net),
+              formatMoney(totals.unpaid_amount),
+            ]}
+            totalTones={[
+              'default',
+              'default',
+              'negative',
+              totals.parking_net >= 0 ? 'positive' : 'negative',
+              'negative',
+            ]}
+          />
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-sand-100 text-xs text-slate-500">
-                  <tr>
-                    <th className="px-4 py-2.5 text-start font-semibold">اليوم</th>
-                    <th className="px-4 py-2.5 text-start font-semibold">سيارات</th>
-                    <th className="px-4 py-2.5 text-start font-semibold">وقوف</th>
-                    <th className="px-4 py-2.5 text-start font-semibold">خدمات</th>
-                    <th className="px-4 py-2.5 text-start font-semibold">مصاريف</th>
-                    <th className="px-4 py-2.5 text-start font-semibold">الصافي</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {report.data?.days.map((day) => {
-                    const net =
-                      day.parking_revenue +
-                      day.services_revenue -
-                      day.expenses_total
-                    return (
-                      <tr
-                        key={day.day}
-                        className={cx(day.entries === 0 && 'text-slate-400')}
-                      >
-                        <td className="whitespace-nowrap px-4 py-2.5 font-medium">
-                          <span className="num">{formatDate(day.day)}</span>
-                          <span className="ms-1.5 text-xs text-slate-400">
-                            {WEEKDAY_SHORT[new Date(day.day).getUTCDay()]}
-                          </span>
-                        </td>
-                        <td className="num px-4 py-2.5">{day.entries}</td>
-                        <td className="num px-4 py-2.5">
-                          {formatMoney(day.parking_revenue)}
-                        </td>
-                        <td className="num px-4 py-2.5 text-sky-700">
-                          {formatMoney(day.services_revenue)}
-                        </td>
-                        <td
-                          className={cx(
-                            'num px-4 py-2.5',
-                            day.expenses_total > 0 && 'text-rose-600',
-                          )}
-                        >
-                          {formatMoney(day.expenses_total)}
-                        </td>
-                        <td
-                          className={cx(
-                            'num px-4 py-2.5 font-semibold',
-                            net >= 0 ? 'text-emerald-700' : 'text-rose-600',
-                          )}
-                        >
-                          {formatMoney(net)}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                <tfoot className="bg-sand-100 font-bold">
-                  <tr>
-                    <td className="px-4 py-2.5">الإجمالي</td>
-                    <td className="num px-4 py-2.5">{totals.entries}</td>
-                    <td className="num px-4 py-2.5">
-                      {formatMoney(totals.parking_revenue)}
-                    </td>
-                    <td className="num px-4 py-2.5 text-sky-700">
-                      {formatMoney(totals.services_revenue)}
-                    </td>
-                    <td className="num px-4 py-2.5 text-rose-600">
-                      {formatMoney(totals.expenses_total)}
-                    </td>
-                    <td
-                      className={cx(
-                        'num px-4 py-2.5',
-                        totals.net_revenue >= 0
-                          ? 'text-emerald-700'
-                          : 'text-rose-600',
-                      )}
-                    >
-                      {formatMoney(totals.net_revenue)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </Card>
+          {/* -------------------- جدول غسيل السيارات -------------------- */}
+          <DailyTable
+            title="غسيل السيارات"
+            subtitle="الخدمات يوماً بيوم"
+            icon={<Droplets className="h-4 w-4 text-sky-600" aria-hidden />}
+            rows={report.data?.days ?? []}
+            isEmptyRow={(d) =>
+              d.services_count === 0 && d.expenses_wash === 0
+            }
+            columns={[
+              { header: 'خدمات', value: (d) => d.services_count, dimZero: true },
+              {
+                header: 'الدخل',
+                value: (d) => formatMoney(d.services_revenue),
+                tone: 'sky',
+              },
+              {
+                header: 'المصاريف',
+                value: (d) => formatMoney(d.expenses_wash),
+                tone: 'negative',
+              },
+              {
+                header: 'الصافي',
+                value: (d) => formatMoney(d.services_revenue - d.expenses_wash),
+                tone: 'positive',
+              },
+            ]}
+            totals={[
+              totals.services_count,
+              formatMoney(totals.services_revenue),
+              formatMoney(totals.expenses_wash),
+              formatMoney(totals.wash_net),
+            ]}
+            totalTones={[
+              'default',
+              'sky',
+              'negative',
+              totals.wash_net >= 0 ? 'positive' : 'negative',
+            ]}
+          />
+
+          {/* ------------------ المصاريف المشتركة ------------------ */}
+          {totals.expenses_shared > 0 && (
+            <DailyTable
+              title="مصاريف مشتركة"
+              subtitle="غير محمّلة على نشاط بعينه"
+              icon={<Receipt className="h-4 w-4 text-slate-500" aria-hidden />}
+              rows={(report.data?.days ?? []).filter(
+                (d) => d.expenses_shared > 0,
+              )}
+              columns={[
+                {
+                  header: 'المبلغ',
+                  value: (d) => formatMoney(d.expenses_shared),
+                  tone: 'negative',
+                },
+              ]}
+              totals={[formatMoney(totals.expenses_shared)]}
+              totalTones={['negative']}
+            />
+          )}
         </>
       )}
 

@@ -58,6 +58,31 @@ export function formatDate(value: string | Date | null | undefined): string {
   return d ? dateFmt.format(d) : '—'
 }
 
+/**
+ * تاريخ رقمي نظيف `DD/MM/YYYY` بلا أي علامات اتجاه.
+ *
+ * لماذا؟ تنسيق `ar-JO` يُدرج علامات اتجاه خفية (RLM ‏U+200F) بين أجزاء
+ * التاريخ لضبط عرضه داخل نص عربي. لكن حين يُوضع الناتج داخل عنصر اتجاهه
+ * LTR — مثل خانات الأرقام في الجداول — تتصارع العلامتان فيتفكك التاريخ
+ * ويظهر مثل «182026/09/» بدل «18/09/2026».
+ *
+ * `en-GB` يعطي نفس الترتيب (يوم/شهر/سنة) بأرقام لاتينية وبلا أي علامة
+ * اتجاه، فيُعرض صحيحاً في الجداول والأعمدة الرقمية.
+ */
+const numericDateFmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: TIMEZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})
+
+export function formatDateNumeric(
+  value: string | Date | null | undefined,
+): string {
+  const d = parse(value)
+  return d ? numericDateFmt.format(d) : '—'
+}
+
 export function formatLongDate(value: string | Date | null | undefined): string {
   const d = parse(value)
   return d ? longDateFmt.format(d) : '—'

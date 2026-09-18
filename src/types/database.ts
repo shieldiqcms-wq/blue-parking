@@ -281,13 +281,25 @@ export interface ReportTotals {
 
 export interface ReportDay {
   day: string
+
+  /* ---- الموقف ---- */
   /** عدد السيارات الداخلة في هذا اليوم */
   entries: number
   sessions: number
   one_time: number
   monthly: number
   parking_revenue: number
+  /** مصاريف محمّلة على الموقف في هذا اليوم */
+  expenses_parking: number
+
+  /* ---- غسيل السيارات ---- */
+  services_count: number
   services_revenue: number
+  /** مصاريف محمّلة على الغسيل في هذا اليوم */
+  expenses_wash: number
+
+  /* ---- مشترك وإجمالي ---- */
+  expenses_shared: number
   expenses_total: number
   unpaid_amount: number
 }
