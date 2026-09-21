@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   CarFront,
   Droplets,
+  FileDown,
   FileSpreadsheet,
   Receipt,
   Wallet,
@@ -77,6 +79,7 @@ function rangeFor(preset: Preset, from: string, to: string): [string, string] {
 
 export function ReportsPage() {
   const toast = useToast()
+  const navigate = useNavigate()
   const today = ammanToday()
 
   const [preset, setPreset] = useState<Preset>('today')
@@ -105,6 +108,21 @@ export function ReportsPage() {
     [from, to, statusFilter, typeFilter],
   )
 
+  /** تقرير PDF واحد: جدول الموقف + السيارات التي دخلت كل يوم */
+  const openPdf = () =>
+    navigate(`/reports/print?from=${from}&to=${to}&auto=1`)
+
+  const pdfButton = (
+    <Button
+      size="sm"
+      variant="secondary"
+      onClick={openPdf}
+      icon={<FileDown className="h-4 w-4" aria-hidden />}
+    >
+      PDF
+    </Button>
+  )
+
   const handleSettle = async (row: SessionDetail) => {
     try {
       await settleSession(
@@ -128,6 +146,12 @@ export function ReportsPage() {
     { header: 'اسم المالك', value: (r) => r.owner_name ?? '', width: 16 },
     { header: 'رقم الهاتف', value: (r) => r.phone ?? '', width: 14 },
     { header: 'نوع الزيارة', value: (r) => SESSION_TYPE_LABEL[r.session_type], width: 13 },
+    {
+      header: `قيمة الاشتراك (${CURRENCY})`,
+      value: (r) => r.subscription_amount ?? '',
+      type: 'money',
+      width: 16,
+    },
     { header: 'وقت الدخول', value: (r) => toExcelDate(r.entry_time), type: 'datetime', width: 18 },
     {
       header: 'وقت الخروج',
@@ -228,6 +252,18 @@ export function ReportsPage() {
             },
             { header: 'سيارات داخلة', value: (d) => d.entries, type: 'number', width: 13 },
             { header: 'عمليات مكتملة', value: (d) => d.sessions, type: 'number', width: 14 },
+            {
+              header: `الزيارات (${CURRENCY})`,
+              value: (d) => d.visits_revenue,
+              type: 'money',
+              width: 14,
+            },
+            {
+              header: `الاشتراكات (${CURRENCY})`,
+              value: (d) => d.subscription_revenue,
+              type: 'money',
+              width: 15,
+            },
             {
               header: `الدخل (${CURRENCY})`,
               value: (d) => d.parking_revenue,
@@ -356,12 +392,21 @@ export function ReportsPage() {
             : `الفترة من ${formatDate(from)} إلى ${formatDate(to)}`
         }
         action={
-          <Button
-            onClick={exportAll}
-            icon={<FileSpreadsheet className="h-4 w-4" aria-hidden />}
-          >
-            تصدير Excel
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={openPdf}
+              icon={<FileDown className="h-4 w-4" aria-hidden />}
+            >
+              PDF
+            </Button>
+            <Button
+              onClick={exportAll}
+              icon={<FileSpreadsheet className="h-4 w-4" aria-hidden />}
+            >
+              Excel
+            </Button>
+          </div>
         }
       />
 
@@ -468,6 +513,11 @@ export function ReportsPage() {
                 revenue={totals.parking_revenue}
                 expenses={totals.expenses_parking}
                 net={totals.parking_net}
+                note={
+                  totals.subscription_revenue > 0
+                    ? `منه اشتراكات ${formatMoney(totals.subscription_revenue)}`
+                    : undefined
+                }
               />
               <ActivityCard
                 title="غسيل السيارات"
@@ -528,14 +578,20 @@ export function ReportsPage() {
           {/* ---------------------- جدول الموقف ---------------------- */}
           <DailyTable
             title="الموقف"
-            subtitle="حركة الوقوف يوماً بيوم"
+            subtitle="حركة الوقوف يوماً بيوم — الدخل يشمل دفعات الاشتراكات"
             icon={<CarFront className="h-4 w-4 text-brand-600" aria-hidden />}
+            action={pdfButton}
             rows={report.data?.days ?? []}
             isEmptyRow={(d) =>
               d.entries === 0 && d.parking_revenue === 0 && d.expenses_parking === 0
             }
             columns={[
               { header: 'سيارات', value: (d) => d.entries, dimZero: true },
+              {
+                header: 'اشتراكات',
+                value: (d) => formatMoney(d.subscription_revenue),
+                tone: 'violet',
+              },
               { header: 'الدخل', value: (d) => formatMoney(d.parking_revenue) },
               {
                 header: 'المصاريف',
@@ -556,6 +612,7 @@ export function ReportsPage() {
             ]}
             totals={[
               totals.entries,
+              formatMoney(totals.subscription_revenue),
               formatMoney(totals.parking_revenue),
               formatMoney(totals.expenses_parking),
               formatMoney(totals.parking_net),
@@ -563,6 +620,7 @@ export function ReportsPage() {
             ]}
             totalTones={[
               'default',
+              'violet',
               'default',
               'negative',
               totals.parking_net >= 0 ? 'positive' : 'negative',
@@ -637,7 +695,10 @@ export function ReportsPage() {
       {/* ----------------------------- العمليات ----------------------------- */}
       <Card padded={false}>
         <div className="flex flex-col gap-3 px-4 pt-4 sm:px-5">
-          <CardTitle>تفاصيل العمليات</CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle>تفاصيل العمليات</CardTitle>
+            {pdfButton}
+          </div>
 
           <div className="grid gap-3 pb-3 sm:grid-cols-2">
             <Select
@@ -703,8 +764,19 @@ export function ReportsPage() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     {row.session_type === 'monthly' && (
-                      <Badge tone="violet">اشتراك</Badge>
+                      <Badge tone="violet">
+                        مشتركة
+                        {row.subscription_amount !== null &&
+                          ` · ${formatMoney(row.subscription_amount)}`}
+                      </Badge>
                     )}
+                    {row.session_type === 'monthly' &&
+                      row.subscription_balance !== null &&
+                      Number(row.subscription_balance) > 0 && (
+                        <Badge tone="amber">
+                          اشتراك غير مدفوع {formatMoney(row.subscription_balance)}
+                        </Badge>
+                      )}
                     {row.exit_time === null ? (
                       <Badge tone="blue">داخل الموقف</Badge>
                     ) : (
@@ -760,6 +832,7 @@ function ActivityCard({
   revenue,
   expenses,
   net,
+  note,
 }: {
   title: string
   icon: React.ReactNode
@@ -767,6 +840,7 @@ function ActivityCard({
   revenue: number
   expenses: number
   net: number
+  note?: string
 }) {
   return (
     <div className="rounded-2xl border border-slate-200/80 p-4">
@@ -789,7 +863,12 @@ function ActivityCard({
 
       <dl className="flex flex-col gap-1.5 text-sm">
         <div className="flex items-center justify-between">
-          <dt className="text-slate-600">الدخل</dt>
+          <dt className="text-slate-600">
+            الدخل
+            {note && (
+              <span className="ms-1.5 text-xs text-violet-700">({note})</span>
+            )}
+          </dt>
           <dd className="num font-semibold text-slate-800">
             {formatMoney(revenue)}
           </dd>

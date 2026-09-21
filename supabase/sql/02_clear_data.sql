@@ -44,6 +44,7 @@ select 'قبل الحذف' as "الحالة",
 begin;
 
 delete from public.payments;
+delete from public.subscription_payments;
 delete from public.ocr_captures;
 delete from public.services;
 delete from public.expenses;

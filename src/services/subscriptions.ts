@@ -3,6 +3,9 @@ import { AppError, toArabicError } from '@/lib/errors'
 import { normalizePlate } from '@/lib/plate'
 import type {
   ComputedSubscriptionStatus,
+  PaymentMethod,
+  SubscriptionPayMode,
+  SubscriptionPaymentDetail,
   SubscriptionRow,
   Vehicle,
 } from '@/types/database'
@@ -58,6 +61,80 @@ function validate(input: SubscriptionInput): void {
   ) {
     throw new AppError('قيمة الاشتراك لا يمكن أن تكون سالبة')
   }
+}
+
+export interface NewSubscriptionInput {
+  startDate: string
+  endDate: string
+  monthlyAmount?: number | null
+  payMode: SubscriptionPayMode
+  /** للدفع الجزئي فقط */
+  paidAmount?: number | null
+  paymentMethod?: PaymentMethod
+  /** سيارة مسجّلة — أو اتركه واملأ plate لسيارة جديدة */
+  vehicleId?: string | null
+  plate?: string | null
+  ownerName?: string | null
+  phone?: string | null
+  notes?: string | null
+}
+
+export interface NewSubscriptionResult {
+  is_new_vehicle: boolean
+  paid_amount: number
+  balance: number
+}
+
+/**
+ * إنشاء اشتراك — يُنشئ السيارة إن لم تكن مسجّلة، ويسجّل الدفعة الأولى
+ * حسب الخيار، في معاملة واحدة داخل قاعدة البيانات.
+ */
+export async function createSubscriptionWithPayment(
+  input: NewSubscriptionInput,
+): Promise<NewSubscriptionResult> {
+  if (!input.vehicleId && !normalizePlate(input.plate)) {
+    throw new AppError('رقم اللوحة مطلوب')
+  }
+  if (!input.startDate || !input.endDate) {
+    throw new AppError('تاريخ البداية والنهاية مطلوبان')
+  }
+  if (input.endDate < input.startDate) {
+    throw new AppError('تاريخ النهاية لا يمكن أن يكون قبل تاريخ البداية')
+  }
+
+  const { data, error } = await supabase.rpc('create_subscription', {
+    p_start_date: input.startDate,
+    p_end_date: input.endDate,
+    p_monthly_amount: input.monthlyAmount ?? null,
+    p_pay_mode: input.payMode,
+    p_paid_amount: input.paidAmount ?? null,
+    p_payment_method: input.paymentMethod ?? 'cash',
+    p_vehicle_id: input.vehicleId ?? null,
+    p_plate: input.plate?.trim() || null,
+    p_owner_name: input.ownerName?.trim() || null,
+    p_phone: input.phone?.trim() || null,
+    p_notes: input.notes?.trim() || null,
+  })
+
+  if (error) throw new AppError(toArabicError(error))
+  return data as NewSubscriptionResult
+}
+
+/** تحصيل دفعة على اشتراك — بلا مبلغ يُحصَّل كامل المتبقّي */
+export async function paySubscription(
+  subscriptionId: string,
+  amount?: number | null,
+  method: PaymentMethod = 'cash',
+  notes?: string | null,
+): Promise<{ paid_now: number; balance: number }> {
+  const { data, error } = await supabase.rpc('pay_subscription', {
+    p_subscription_id: subscriptionId,
+    p_amount: amount ?? null,
+    p_payment_method: method,
+    p_notes: notes?.trim() || null,
+  })
+  if (error) throw new AppError(toArabicError(error))
+  return data as { paid_now: number; balance: number }
 }
 
 export async function createSubscription(
@@ -155,4 +232,21 @@ export async function searchVehiclesForSubscription(
 
   if (error) throw new AppError(toArabicError(error))
   return (data ?? []) as Vehicle[]
+}
+
+/** دفعات الاشتراكات المقبوضة في فترة (حسب تاريخ القبض بتوقيت الأردن) */
+export async function listSubscriptionPayments(
+  from: string,
+  to: string,
+): Promise<SubscriptionPaymentDetail[]> {
+  const { data, error } = await supabase
+    .from('subscription_payment_details')
+    .select('*')
+    .gte('business_date', from)
+    .lte('business_date', to)
+    .order('paid_at', { ascending: true })
+    .limit(2000)
+
+  if (error) throw new AppError(toArabicError(error))
+  return (data ?? []) as SubscriptionPaymentDetail[]
 }

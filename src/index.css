@@ -35,13 +35,26 @@
     display: inline-block;
   }
 
-  /* حقول الإدخال الرقمية تُكتب من اليسار لليمين */
+  /* حقول الأرقام الصرفة تُكتب من اليسار لليمين */
   input[type='number'],
   input[type='tel'],
+  input[inputmode='numeric'],
+  input[inputmode='decimal'] {
+    direction: ltr;
+    text-align: right;
+  }
+
+  /*
+   * حقول التاريخ والوقت تبقى باتجاه الصفحة (RTL) عمداً.
+   *
+   * المتصفح على الجوال يعرض التاريخ بلغة الجهاز، ويُدرج فيه علامات اتجاه
+   * خفية تضبط ترتيبه داخل واجهة عربية. فرض LTR عليها يجعل تلك العلامات
+   * تعمل عكس غرضها فيتفكك التاريخ ويظهر مثل «212026/09/» بدل «21/09/2026».
+   */
   input[type='date'],
   input[type='time'],
-  input[inputmode='numeric'] {
-    direction: ltr;
+  input[type='datetime-local'] {
+    direction: rtl;
     text-align: right;
   }
 
@@ -70,7 +83,7 @@
     gap: 12px;
     height: 100vh;
     font-family: 'Noto Kufi Arabic', Tahoma, sans-serif;
-    color: #2d4b7c;
+    color: #1d4ed8;
     background: #f4f2ee;
   }
   .boot-logo {
@@ -78,11 +91,67 @@
   }
 }
 
+/* ------------------------- جداول تقرير الطباعة / PDF ------------------------- */
+@layer components {
+  .print-table {
+    border-collapse: collapse;
+  }
+  .print-table th,
+  .print-table td {
+    @apply whitespace-nowrap border border-slate-200 px-2 py-1.5 text-start align-top;
+  }
+  .print-table thead th {
+    @apply bg-slate-100 text-[11px] font-bold text-slate-700;
+  }
+  .print-table tbody tr:nth-child(even) td {
+    @apply bg-slate-50/60;
+  }
+  .print-table tfoot td {
+    @apply bg-brand-50 font-bold text-brand-900;
+  }
+  .print-badge {
+    @apply inline-block whitespace-nowrap rounded px-1.5 py-0.5 text-[11px] font-bold;
+  }
+  .print-badge-violet {
+    @apply bg-violet-100 text-violet-800;
+  }
+}
+
 @media print {
+  @page {
+    size: A4;
+    margin: 12mm 10mm;
+  }
+
   .no-print {
     display: none !important;
   }
-  body {
+
+  html,
+  body,
+  #root {
+    height: auto;
     background: #fff;
+  }
+
+  /* الخلفيات الملوّنة (رؤوس الجداول، الشارات) تُطبع كما هي */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* رأس الجدول يتكرر في كل صفحة، والصف لا ينقسم بين صفحتين */
+  .print-table thead {
+    display: table-header-group;
+  }
+  /* الإجمالي يظهر مرة واحدة في النهاية، لا في أسفل كل صفحة */
+  .print-table tfoot {
+    display: table-row-group;
+  }
+  .print-table tr {
+    break-inside: avoid;
+  }
+  .print-day > div:first-child {
+    break-after: avoid;
   }
 }

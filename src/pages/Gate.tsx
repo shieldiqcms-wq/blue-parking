@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Banknote,
+  BellRing,
   CalendarX,
   Camera,
   CarFront,
@@ -16,6 +17,10 @@ import {
 import { PlateCamera } from '@/components/PlateCamera'
 import { PlateInput } from '@/components/PlateInput'
 import { ServiceDialog } from '@/components/ServiceDialog'
+import {
+  SubscriptionPayDialog,
+  type SubscriptionDue,
+} from '@/components/SubscriptionPayDialog'
 import {
   Badge,
   Button,
@@ -112,6 +117,9 @@ export function GatePage() {
   const [discountReason, setDiscountReason] = useState('')
   const [exitNotes, setExitNotes] = useState('')
   const [serviceOpen, setServiceOpen] = useState(false)
+
+  // تحصيل اشتراك غير مدفوع (تذكير عند الدخول)
+  const [subPay, setSubPay] = useState<SubscriptionDue | null>(null)
 
   // النتيجة
   const [entryResult, setEntryResult] = useState<RegisterEntryResult | null>(null)
@@ -315,8 +323,49 @@ export function GatePage() {
     }
   }
 
+  /* ------------------------ تذكير الاشتراك غير المدفوع ------------------------ */
+  const subBalance = Number(lookup?.subscription_balance ?? 0)
+  const subDue = Boolean(lookup?.subscription) && subBalance > 0
+
+  const openSubPay = () => {
+    if (!lookup?.subscription) return
+    setSubPay({
+      subscriptionId: lookup.subscription.id,
+      plate: lookup.vehicle?.plate_number ?? plate,
+      amount: lookup.subscription.monthly_amount,
+      balance: subBalance,
+    })
+  }
+
+  const afterSubPaid = async () => {
+    setSubPay(null)
+    // تحديث الرصيد حتى يختفي التذكير أو يُظهر الباقي
+    const fresh = await lookupPlate(lookup?.vehicle?.plate_number ?? plate).catch(
+      () => null,
+    )
+    if (fresh) setLookup(fresh)
+  }
+
+  const subReminder = subDue && lookup?.subscription && (
+    <SubscriptionReminder
+      balance={subBalance}
+      paid={Number(lookup.subscription_paid ?? 0)}
+      amount={lookup.subscription.monthly_amount}
+      onCollect={openSubPay}
+    />
+  )
+
+  const subPayDialog = (
+    <SubscriptionPayDialog
+      due={subPay}
+      onClose={() => setSubPay(null)}
+      onPaid={() => void afterSubPaid()}
+    />
+  )
+
   const reset = () => {
     setPlate('')
+    setSubPay(null)
     setPlateError(null)
     setLookup(null)
     setPreview(null)
@@ -366,6 +415,9 @@ export function GatePage() {
             <Badge tone="blue">زيارة عادية</Badge>
           )}
         </div>
+
+        {subReminder && <div className="mt-4 text-start">{subReminder}</div>}
+        {subPayDialog}
 
         <dl className="mt-5 grid grid-cols-2 gap-3 text-start">
           <Detail label="وقت الدخول">
@@ -630,6 +682,8 @@ export function GatePage() {
               </p>
             )}
 
+            {subReminder}
+
             {lookup.is_closed_day && (
               <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900">
                 <CalendarX className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -688,6 +742,8 @@ export function GatePage() {
             <h2 className="text-base font-bold text-emerald-700">
               تسجيل دخول السيارة
             </h2>
+
+            {subReminder}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="اسم المالك" htmlFor="owner">
@@ -1246,6 +1302,8 @@ export function GatePage() {
         onDetected={handleDetected}
       />
 
+      {subPayDialog}
+
       <ServiceDialog
         open={serviceOpen}
         onClose={() => setServiceOpen(false)}
@@ -1280,6 +1338,54 @@ function quickAmounts(due: number): number[] {
     .filter((v) => v >= 0 && v <= due)
     .sort((a, b) => b - a)
     .slice(0, 4)
+}
+
+/** تذكير بمبلغ اشتراك غير مدفوع — يظهر كلما بُحث عن السيارة أو دخلت */
+function SubscriptionReminder({
+  balance,
+  paid,
+  amount,
+  onCollect,
+}: {
+  balance: number
+  paid: number
+  amount: number | null
+  onCollect: () => void
+}) {
+  return (
+    <div
+      className="flex flex-col gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 p-3"
+      role="alert"
+    >
+      <div className="flex items-start gap-2.5">
+        <BellRing className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden />
+        <div className="min-w-0 text-sm text-amber-900">
+          <p className="font-bold">
+            {paid > 0 ? 'الاشتراك مدفوع جزئياً' : 'الاشتراك غير مدفوع'}
+          </p>
+          <p className="mt-0.5">
+            المتبقّي{' '}
+            <span className="num text-base font-bold">{formatMoney(balance)}</span>{' '}
+            {CURRENCY}
+            {amount !== null && (
+              <span className="text-amber-800">
+                {' '}
+                (مدفوع <span className="num">{formatMoney(paid)}</span> من{' '}
+                <span className="num">{formatMoney(amount)}</span>)
+              </span>
+            )}
+          </p>
+        </div>
+      </div>
+      <Button
+        size="sm"
+        onClick={onCollect}
+        icon={<Banknote className="h-4 w-4" aria-hidden />}
+      >
+        تحصيل الاشتراك الآن
+      </Button>
+    </div>
+  )
 }
 
 function SuccessScreen({

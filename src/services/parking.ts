@@ -148,6 +148,11 @@ export interface SessionFilter {
   sessionType?: string
   search?: string
   limit?: number
+  /**
+   * على أي تاريخ تُطبَّق الفترة: تاريخ الإيراد (الخروج، افتراضياً)
+   * أو تاريخ الدخول — لقائمة «السيارات التي دخلت في هذا اليوم».
+   */
+  dateField?: 'business_date' | 'entry_date'
 }
 
 export async function listSessions(
@@ -159,8 +164,9 @@ export async function listSessions(
     .order('entry_time', { ascending: false })
     .limit(filter.limit ?? 500)
 
-  if (filter.from) query = query.gte('business_date', filter.from)
-  if (filter.to) query = query.lte('business_date', filter.to)
+  const dateField = filter.dateField ?? 'business_date'
+  if (filter.from) query = query.gte(dateField, filter.from)
+  if (filter.to) query = query.lte(dateField, filter.to)
   if (filter.paymentStatus) query = query.eq('payment_status', filter.paymentStatus)
   if (filter.sessionType) query = query.eq('session_type', filter.sessionType)
 

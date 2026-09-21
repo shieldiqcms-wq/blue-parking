@@ -52,7 +52,7 @@ export function AppLayout() {
           </button>
 
           <NavLink to="/" className="flex items-center gap-2">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-700 text-sm font-bold text-white">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white">
               P
             </span>
             <span className="text-base font-bold text-brand-900">
@@ -105,7 +105,7 @@ export function AppLayout() {
                   cx(
                     'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition',
                     isActive
-                      ? 'bg-brand-700 text-white shadow-sm'
+                      ? 'bg-brand-600 text-white shadow-sm'
                       : 'text-slate-600 hover:bg-white hover:text-brand-800',
                   )
                 }
@@ -144,7 +144,7 @@ export function AppLayout() {
                   cx(
                     'flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition',
                     isActive
-                      ? 'bg-brand-700 text-white'
+                      ? 'bg-brand-600 text-white'
                       : 'text-slate-600 hover:bg-sand-100',
                   )
                 }

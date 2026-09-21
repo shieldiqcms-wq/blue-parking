@@ -10,6 +10,7 @@ import {
 } from '@/services/vehicles'
 import { toArabicError } from '@/lib/errors'
 import { isValidPlate, displayPlate } from '@/lib/plate'
+import { PlateInput } from '@/components/PlateInput'
 import { formatDate } from '@/lib/format'
 import {
   Badge,
@@ -218,15 +219,10 @@ export function VehiclesPage() {
       >
         <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
           <Field label="رقم اللوحة" htmlFor="v-plate" required>
-            <Input
+            <PlateInput
               id="v-plate"
               value={form.plate_number}
-              onChange={(e) =>
-                setForm({ ...form, plate_number: e.target.value })
-              }
-              placeholder="مثال: 12-34567"
-              className="num text-lg font-bold"
-              maxLength={32}
+              onChange={(value) => setForm({ ...form, plate_number: value })}
               autoFocus
             />
           </Field>

@@ -7,6 +7,7 @@ import { toArabicError } from '@/lib/errors'
 import { formatMoney, PAYMENT_METHOD_LABEL, SERVICE_TYPE_LABEL } from '@/lib/format'
 import { CURRENCY } from '@/lib/env'
 import { isValidPlate } from '@/lib/plate'
+import { PlateInput } from '@/components/PlateInput'
 import type { PaymentMethod, ServiceType } from '@/types/database'
 
 /** مبالغ شائعة للغسيل والتمسيح — تسريع الإدخال على الموبايل */
@@ -137,14 +138,7 @@ export function ServiceDialog({
             required={standalone}
             hint={standalone ? 'تُضاف السيارة تلقائياً إن لم تكن مسجّلة' : undefined}
           >
-            <Input
-              id="svc-plate"
-              value={plateValue}
-              onChange={(e) => setPlateValue(e.target.value)}
-              placeholder="مثال: 15-11000"
-              className="num text-lg font-bold"
-              maxLength={32}
-            />
+            <PlateInput id="svc-plate" value={plateValue} onChange={setPlateValue} />
           </Field>
         )}
 

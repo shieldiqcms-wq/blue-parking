@@ -11,6 +11,7 @@ import { GatePage } from '@/pages/Gate'
 import { LoginPage } from '@/pages/Login'
 import { MissingConfigPage } from '@/pages/MissingConfig'
 import { NoAccessPage } from '@/pages/NoAccess'
+import { ParkingPrintPage } from '@/pages/ParkingPrint'
 import { ReportsPage } from '@/pages/Reports'
 import { SettingsPage } from '@/pages/Settings'
 import { SubscriptionsPage } from '@/pages/Subscriptions'
@@ -51,6 +52,8 @@ function AuthenticatedApp() {
   return (
     <Routes>
       <Route path="/login" element={<Navigate to="/" replace />} />
+      {/* تقرير الطباعة / PDF — خارج الإطار حتى لا تُطبع القوائم */}
+      <Route path="/reports/print" element={<ParkingPrintPage />} />
       <Route element={<AppLayout />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/gate" element={<GatePage />} />

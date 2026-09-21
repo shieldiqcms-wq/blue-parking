@@ -64,8 +64,38 @@ export interface SubscriptionRow {
   raw_status: SubscriptionStatus
   computed_status: ComputedSubscriptionStatus
   days_left: number
+  /** مجموع ما دُفع من الاشتراك */
+  paid_amount: number
+  /** قيمة الاشتراك ناقص المدفوع */
+  balance: number
+  payment_state: SubscriptionPaymentState
+  last_paid_at: string | null
   created_at: string
 }
+
+/** دفعة على اشتراك — من العرض subscription_payment_details */
+export interface SubscriptionPaymentDetail {
+  id: string
+  subscription_id: string
+  amount: number
+  payment_method: PaymentMethod
+  paid_at: string
+  /** تاريخ القبض بتوقيت الأردن */
+  business_date: string
+  notes: string | null
+  vehicle_id: string
+  subscription_amount: number | null
+  start_date: string
+  end_date: string
+  plate_number: string
+  owner_name: string | null
+}
+
+/** حالة دفع الاشتراك */
+export type SubscriptionPaymentState = 'paid' | 'partial' | 'unpaid' | 'no_amount'
+
+/** خيار الدفع عند إنشاء الاشتراك */
+export type SubscriptionPayMode = 'now' | 'partial' | 'later'
 
 export interface ParkingSession {
   id: string
@@ -115,6 +145,8 @@ export interface SessionDetail {
   entry_time: string
   exit_time: string | null
   business_date: string
+  /** تاريخ الدخول بتوقيت الأردن — لتجميع السيارات حسب يوم دخولها */
+  entry_date: string
   duration_minutes: number | null
   amount_due: number
   amount_collected: number | null
@@ -125,6 +157,10 @@ export interface SessionDetail {
   payment_method: PaymentMethod | null
   notes: string | null
   vehicle_id: string
+  subscription_id: string | null
+  /** قيمة الاشتراك إن كانت السيارة مشتركة */
+  subscription_amount: number | null
+  subscription_balance: number | null
   services_total: number
   created_at: string
 }
@@ -165,6 +201,10 @@ export interface LookupPlateResult {
   vehicle: Vehicle | null
   subscription: Subscription | null
   active_session: ParkingSession | null
+  /** ما دُفع من الاشتراك الساري */
+  subscription_paid: number
+  /** المتبقّي على الاشتراك الساري — للتذكير عند الدخول */
+  subscription_balance: number
   is_closed_day: boolean
 }
 
@@ -223,6 +263,12 @@ export interface DashboardStats {
   expenses_today: number
   /** ما حُصِّل لحظة الدخول اليوم (جزء من parking_today) */
   prepaid_today: number
+  /** دفعات الاشتراكات المقبوضة اليوم (جزء من parking_today) */
+  subscriptions_today: number
+  subscriptions_month: number
+  /** اشتراكات سارية عليها مبالغ غير مدفوعة */
+  subscriptions_due_count: number
+  subscriptions_due_total: number
   /** الوقوف + الخدمات */
   revenue_today: number
   /** الإجمالي − المصاريف */
@@ -250,7 +296,12 @@ export interface ReportTotals {
   paid_count: number
   unpaid_count: number
   waived_count: number
-  /** المحصّل من الوقوف (حسب تاريخ قبض النقد) */
+  /** دفعات الزيارات */
+  visits_revenue: number
+  /** دفعات الاشتراكات المقبوضة في الفترة */
+  subscription_revenue: number
+  subscription_payments_count: number
+  /** المحصّل من الوقوف = الزيارات + الاشتراكات (حسب تاريخ قبض النقد) */
   parking_revenue: number
   /** منه ما حُصِّل لحظة الدخول */
   prepaid_total: number
@@ -288,6 +339,10 @@ export interface ReportDay {
   sessions: number
   one_time: number
   monthly: number
+  visits_revenue: number
+  /** دفعات الاشتراكات المقبوضة في هذا اليوم */
+  subscription_revenue: number
+  /** الزيارات + الاشتراكات */
   parking_revenue: number
   /** مصاريف محمّلة على الموقف في هذا اليوم */
   expenses_parking: number

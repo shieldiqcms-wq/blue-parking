@@ -18,7 +18,7 @@ export interface DailyColumn<T> {
   header: string
   value: (row: T) => string | number
   /** نغمة اللون للقيمة */
-  tone?: 'default' | 'positive' | 'negative' | 'sky' | 'muted'
+  tone?: 'default' | 'positive' | 'negative' | 'sky' | 'violet' | 'muted'
   /** القيمة صفر تُعرض باهتة لتقليل الضجيج البصري */
   dimZero?: boolean
 }
@@ -27,6 +27,8 @@ interface DailyTableProps<T extends { day: string }> {
   title: string
   subtitle?: string
   icon?: React.ReactNode
+  /** زر في رأس الجدول (مثل PDF) */
+  action?: React.ReactNode
   rows: T[]
   columns: DailyColumn<T>[]
   /** صف الإجمالي */
@@ -54,6 +56,8 @@ function toneClass(
       return isZero ? 'text-slate-400' : 'text-rose-600'
     case 'sky':
       return isZero ? 'text-slate-400' : 'text-sky-700'
+    case 'violet':
+      return isZero ? 'text-slate-400' : 'text-violet-700'
     case 'muted':
       return 'text-slate-500'
     default:
@@ -65,6 +69,7 @@ export function DailyTable<T extends { day: string }>({
   title,
   subtitle,
   icon,
+  action,
   rows,
   columns,
   totals,
@@ -73,9 +78,9 @@ export function DailyTable<T extends { day: string }>({
 }: DailyTableProps<T>) {
   return (
     <Card padded={false}>
-      <div className="px-4 pt-4 sm:px-5">
+      <div className="flex items-start justify-between gap-2 px-4 pt-4 sm:px-5">
         <CardTitle>
-          <span className="flex items-center gap-2">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             {icon}
             {title}
             {subtitle && (
@@ -85,6 +90,7 @@ export function DailyTable<T extends { day: string }>({
             )}
           </span>
         </CardTitle>
+        {action && <div className="shrink-0">{action}</div>}
       </div>
 
       <div className="overflow-x-auto">

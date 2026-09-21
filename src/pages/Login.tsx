@@ -63,7 +63,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-brand-800 via-brand-700 to-brand-900 px-4 py-10">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-brand-500 via-brand-600 to-brand-700 px-4 py-10">
       <div className="mb-6 flex flex-col items-center gap-3 text-white">
         <div className="grid h-16 w-16 place-items-center rounded-2xl bg-white/15 text-3xl backdrop-blur">
           🅿️

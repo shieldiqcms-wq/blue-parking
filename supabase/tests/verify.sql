@@ -21,7 +21,8 @@ begin
   for r in
     select * from (values
       ('profiles'), ('vehicles'), ('subscriptions'), ('pricing_rules'),
-      ('parking_sessions'), ('payments'), ('ocr_captures'), ('app_settings')
+      ('parking_sessions'), ('payments'), ('ocr_captures'), ('app_settings'),
+      ('services'), ('expenses'), ('subscription_payments')
     ) t(tbl)
   loop
     if to_regclass('public.' || quote_ident(r.tbl)) is null then
@@ -67,7 +68,8 @@ rls_check as (
   where n.nspname = 'public'
     and c.relkind = 'r'
     and c.relname in ('profiles','vehicles','subscriptions','pricing_rules',
-                      'parking_sessions','payments','ocr_captures','app_settings')
+                      'parking_sessions','payments','ocr_captures','app_settings',
+                      'services','expenses','subscription_payments')
 ),
 
 -- 2) الحسابات ---------------------------------------------------------------
@@ -307,6 +309,47 @@ data_counts as (
   select '9. البيانات الحالية', 'عمليات مكتملة', '—',
          (select count(*) from public.parking_sessions
           where exit_time is not null)::text, 'ℹ️', 90, 'd'
+  union all
+  select '9. البيانات الحالية', 'اشتراكات عليها مبالغ غير مدفوعة', '—',
+         (select count(*) from public.subscription_status
+          where raw_status = 'active' and balance > 0)::text
+         || ' — المتبقّي '
+         || to_char(coalesce((select sum(balance) from public.subscription_status
+                              where raw_status = 'active' and balance > 0), 0), 'FM999990.00')
+         || ' د.أ', 'ℹ️', 90, 'e'
+),
+
+-- 10) دفع الاشتراكات -----------------------------------------------------------
+subs_payments as (
+  select '10. دفع الاشتراكات', f.fn, 'موجودة ومتاحة للمالك فقط',
+         case
+           when to_regprocedure(f.sig) is null then 'غير موجودة'
+           when has_function_privilege('anon', to_regprocedure(f.sig), 'execute')
+             then 'متاحة لـ anon!'
+           else 'موجودة'
+         end,
+         case
+           when to_regprocedure(f.sig) is not null
+            and not has_function_privilege('anon', to_regprocedure(f.sig), 'execute')
+           then '✅' else '❌'
+         end,
+         100, f.fn
+  from (values
+    ('create_subscription',
+     'public.create_subscription(date,date,numeric,text,numeric,text,uuid,text,text,text,text)'),
+    ('pay_subscription', 'public.pay_subscription(uuid,numeric,text,text)')
+  ) f(fn, sig)
+  union all
+  select '10. دفع الاشتراكات', 'الدفعات للقراءة فقط من التطبيق', 'لا إضافة/تعديل/حذف مباشر',
+         case when has_table_privilege('authenticated', 'public.subscription_payments', 'insert')
+                or has_table_privilege('authenticated', 'public.subscription_payments', 'update')
+                or has_table_privilege('authenticated', 'public.subscription_payments', 'delete')
+              then 'قابلة للتعديل مباشرة!' else 'قراءة فقط' end,
+         case when has_table_privilege('authenticated', 'public.subscription_payments', 'insert')
+                or has_table_privilege('authenticated', 'public.subscription_payments', 'update')
+                or has_table_privilege('authenticated', 'public.subscription_payments', 'delete')
+              then '❌' else '✅' end,
+         100, 'z'
 ),
 
 all_checks as (
@@ -320,6 +363,7 @@ all_checks as (
   union all select * from integrity
   union all select * from exposure
   union all select * from data_counts
+  union all select * from subs_payments
 )
 
 select
@@ -339,8 +383,9 @@ order by ord1, ord2;
 --   ❌  مشكلة — راجعها قبل الاستخدام الفعلي
 --
 -- الأهم:
---   • القسم 1: كل الجداول الثمانية يجب أن تكون ✅
+--   • القسم 1: كل الجداول الإحدى عشرة يجب أن تكون ✅
 --   • القسم 2: «عدد حسابات المالك» = حساب واحد، وبريدك يظهر بـ «المالك»
 --   • القسم 4: كل الحالات الـ 13 يجب أن تكون ✅
 --   • القسم 8: كلا السطرين يجب أن يكونا ✅ (صفر تعرّض للمجهول)
+--   • القسم 10: الأسطر الثلاثة ✅ (دفع الاشتراكات عبر دوال آمنة فقط)
 -- ============================================================================

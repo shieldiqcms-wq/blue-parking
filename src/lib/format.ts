@@ -43,19 +43,36 @@ function parse(value: string | Date | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
+/**
+ * يزيل علامات الاتجاه الخفية التي يُدرجها تنسيق ar-JO.
+ *
+ * العلامات: RLM (U+200F) و LRM (U+200E) و ALM (U+061C).
+ * يُدرجها المتصفح بين أجزاء التاريخ لضبط ترتيبها داخل نص عربي، لكنها
+ * تنقلب ضد غرضها حين يُعرض التاريخ داخل عنصر اتجاهه LTR — مثل خانات
+ * الأرقام `.num` — فيتفكك ويظهر «182026/09/» بدل «18/09/2026».
+ *
+ * بدونها يُعرض التاريخ صحيحاً في الحالتين: الأرقام والشرطة المائلة
+ * تتجمّع تلقائياً ككتلة واحدة من اليسار لليمين حتى داخل نص عربي.
+ */
+const BIDI_MARKS = /[‎‏؜]/g
+
+function clean(text: string): string {
+  return text.replace(BIDI_MARKS, '')
+}
+
 export function formatDateTime(value: string | Date | null | undefined): string {
   const d = parse(value)
-  return d ? dateTimeFmt.format(d) : '—'
+  return d ? clean(dateTimeFmt.format(d)) : '—'
 }
 
 export function formatTime(value: string | Date | null | undefined): string {
   const d = parse(value)
-  return d ? timeFmt.format(d) : '—'
+  return d ? clean(timeFmt.format(d)) : '—'
 }
 
 export function formatDate(value: string | Date | null | undefined): string {
   const d = parse(value)
-  return d ? dateFmt.format(d) : '—'
+  return d ? clean(dateFmt.format(d)) : '—'
 }
 
 /**
@@ -85,7 +102,7 @@ export function formatDateNumeric(
 
 export function formatLongDate(value: string | Date | null | undefined): string {
   const d = parse(value)
-  return d ? longDateFmt.format(d) : '—'
+  return d ? clean(longDateFmt.format(d)) : '—'
 }
 
 /** مبلغ بالدينار الأردني — منزلتان عشريتان دائماً */
@@ -281,6 +298,13 @@ export const SUBSCRIPTION_STATUS_LABEL: Record<string, string> = {
   expired: 'منتهي',
   upcoming: 'لم يبدأ',
   cancelled: 'ملغي',
+}
+
+export const SUBSCRIPTION_PAYMENT_LABEL: Record<string, string> = {
+  paid: 'مدفوع',
+  partial: 'مدفوع جزئياً',
+  unpaid: 'غير مدفوع',
+  no_amount: 'بلا قيمة',
 }
 
 export const SERVICE_TYPE_LABEL: Record<string, string> = {

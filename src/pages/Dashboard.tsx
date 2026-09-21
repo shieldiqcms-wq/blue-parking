@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import {
   AlertCircle,
   ArrowLeftRight,
+  BellRing,
   CalendarX,
   CarFront,
   Droplets,
@@ -86,6 +87,31 @@ export function DashboardPage() {
 
       {stats.data && (
         <>
+          {stats.data.subscriptions_due_count > 0 && (
+            <Link
+              to="/subscriptions"
+              className="flex items-center gap-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-inset ring-amber-200 transition hover:bg-amber-100"
+            >
+              <BellRing className="h-5 w-5 shrink-0 text-amber-600" aria-hidden />
+              <span className="flex-1">
+                <span className="num font-bold">
+                  {stats.data.subscriptions_due_count}
+                </span>{' '}
+                {stats.data.subscriptions_due_count === 1
+                  ? 'اشتراك غير مدفوع'
+                  : 'اشتراكات غير مدفوعة'}{' '}
+                — المتبقّي{' '}
+                <span className="num font-bold">
+                  {formatMoney(stats.data.subscriptions_due_total)}
+                </span>{' '}
+                {CURRENCY}
+              </span>
+              <span className="shrink-0 text-xs font-semibold text-amber-700">
+                عرض
+              </span>
+            </Link>
+          )}
+
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             <StatCard
               label="السيارات الموجودة حالياً"
@@ -152,6 +178,11 @@ export function DashboardPage() {
               value={formatMoney(stats.data.parking_today)}
               unit={CURRENCY}
               tone="blue"
+              hint={
+                stats.data.subscriptions_today > 0
+                  ? `منه اشتراكات ${formatMoney(stats.data.subscriptions_today)}`
+                  : undefined
+              }
             />
             <StatCard
               label="خدمات اليوم"
