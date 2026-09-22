@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
 import { AppError, toArabicError } from '@/lib/errors'
 import { normalizePlate } from '@/lib/plate'
+import { addDays, ammanDateOf } from '@/lib/format'
 import type {
   ServiceType,
   CarInside,
@@ -274,4 +275,64 @@ export async function listSessionAdjustments(
 
   if (error) throw new AppError(toArabicError(error))
   return (data ?? []) as SessionAdjustment[]
+}
+
+/* ===================== الدفعات حسب طريقة الدفع (للتقارير) ===================== */
+
+export interface PaymentLine {
+  session_id: string
+  amount: number
+  payment_method: PaymentMethod | null
+  paid_at: string
+}
+
+const PAGE_SIZE = 1000
+
+/** دفعات الزيارات المقبوضة في فترة — حسب تاريخ القبض بتوقيت الأردن */
+export async function listPaymentsInRange(from: string, to: string): Promise<PaymentLine[]> {
+  // هامش يوم من كل جهة، ثم تصفية دقيقة بتاريخ الأردن
+  const start = `${addDays(from, -1)}T00:00:00Z`
+  const end = `${addDays(to, 2)}T00:00:00Z`
+
+  const rows: PaymentLine[] = []
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('payments')
+      .select('session_id, amount, payment_method, paid_at')
+      .gte('paid_at', start)
+      .lt('paid_at', end)
+      .order('paid_at', { ascending: true })
+      .order('id', { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1)
+
+    if (error) throw new AppError(toArabicError(error))
+    rows.push(...((data ?? []) as PaymentLine[]))
+    if (!data || data.length < PAGE_SIZE) break
+  }
+
+  return rows.filter((r) => {
+    const day = ammanDateOf(r.paid_at)
+    return day >= from && day <= to
+  })
+}
+
+/** كل دفعات مجموعة عمليات — بصرف النظر عن تاريخ القبض */
+export async function listPaymentsForSessions(sessionIds: string[]): Promise<PaymentLine[]> {
+  const chunks: string[][] = []
+  for (let i = 0; i < sessionIds.length; i += 100) {
+    chunks.push(sessionIds.slice(i, i + 100))
+  }
+
+  const results = await Promise.all(
+    chunks.map(async (ids) => {
+      const { data, error } = await supabase
+        .from('payments')
+        .select('session_id, amount, payment_method, paid_at')
+        .in('session_id', ids)
+        .limit(PAGE_SIZE)
+      if (error) throw new AppError(toArabicError(error))
+      return (data ?? []) as PaymentLine[]
+    }),
+  )
+  return results.flat()
 }

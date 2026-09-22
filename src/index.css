@@ -115,6 +115,24 @@
   .print-badge-violet {
     @apply bg-violet-100 text-violet-800;
   }
+  .print-badge-green {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+  .print-badge-sky {
+    @apply bg-sky-100 text-sky-800;
+  }
+  .print-badge-amber {
+    @apply bg-amber-100 text-amber-800;
+  }
+  .print-table thead th.print-th-green {
+    @apply bg-emerald-50 text-emerald-800;
+  }
+  .print-table thead th.print-th-caption {
+    @apply bg-violet-50 text-xs text-violet-800;
+  }
+  .print-table thead th.print-th-sky {
+    @apply bg-sky-50 text-sky-800;
+  }
 }
 
 @media print {
@@ -150,6 +168,12 @@
   }
   .print-table tr {
     break-inside: avoid;
+  }
+  /* هوامش أضيق داخل الخلايا حتى يتسع الجدول لعرض صفحة A4 */
+  .print-table th,
+  .print-table td {
+    padding-left: 4px;
+    padding-right: 4px;
   }
   .print-day > div:first-child {
     break-after: avoid;
