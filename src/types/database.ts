@@ -134,7 +134,36 @@ export interface CarInside {
   entry_time: string
   notes: string | null
   subscription_end_date: string | null
+  /** ما دُفع قبل الخروج (عند الدخول أو أثناء الوقوف) */
+  prepaid_amount: number
+  prepaid_method: PaymentMethod | null
+  prepaid_at: string | null
+  /** اشتراك ساري اليوم — قد يكون أُنشئ بعد دخول السيارة */
+  active_subscription_id: string | null
+  active_subscription_end: string | null
+  adjustments_count: number
 }
+
+export type SessionAdjustmentAction =
+  | 'collect'
+  | 'correct_payment'
+  | 'convert_to_subscription'
+  | 'auto_fix'
+
+/** سطر في سجل تعديلات العملية */
+export interface SessionAdjustment {
+  id: string
+  session_id: string
+  action: SessionAdjustmentAction
+  before_state: Record<string, unknown>
+  after_state: Record<string, unknown>
+  amount_change: number
+  reason: string | null
+  created_at: string
+}
+
+/** ماذا يحدث للمبلغ المسجّل عند تحويل الدخول إلى اشتراك */
+export type PrepaidAction = 'void' | 'to_subscription'
 
 export interface SessionDetail {
   id: string
@@ -163,6 +192,8 @@ export interface SessionDetail {
   subscription_balance: number | null
   services_total: number
   created_at: string
+  /** عدد التعديلات على هذه العملية */
+  adjustments_count: number
 }
 
 export interface PricingRule {

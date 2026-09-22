@@ -454,6 +454,7 @@ function SessionNote({ session: s }: { session: SessionDetail }) {
   }
   if (s.prepaid_amount > 0) notes.push(`مدفوع عند الدخول ${formatMoney(s.prepaid_amount)}`)
   if (s.services_total > 0) notes.push(`غسيل ${formatMoney(s.services_total)}`)
+  if (s.adjustments_count > 0) notes.push('معدّلة (لها سجل تعديلات)')
 
   return notes.length > 0 ? <>{notes.join(' · ')}</> : <span className="text-slate-300">—</span>
 }

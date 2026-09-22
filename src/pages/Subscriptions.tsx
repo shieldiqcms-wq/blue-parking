@@ -471,14 +471,17 @@ const PAY_MODES: Array<{
   },
 ]
 
-function SubscriptionForm({
+export function SubscriptionForm({
   open,
   editing,
+  initialPlate,
   onClose,
   onSaved,
 }: {
   open: boolean
   editing: SubscriptionRow | null
+  /** رقم لوحة يُملأ مسبقاً — مثلاً عند الاشتراك من شاشة السيارات الموجودة */
+  initialPlate?: string
   onClose: () => void
   onSaved: () => void
 }) {
@@ -522,7 +525,7 @@ function SubscriptionForm({
       setNotes('')
     }
 
-    setPlate('')
+    setPlate(editing ? '' : (initialPlate ?? ''))
     setMatches([])
     setSelected(null)
     setOwnerName('')
@@ -533,7 +536,7 @@ function SubscriptionForm({
     setPaidAmount('')
     setMethod('cash')
     setError(null)
-  }, [open, editing, today])
+  }, [open, editing, today, initialPlate])
 
   // البحث عن السيارة أثناء الكتابة
   const normalized = normalizePlate(plate)

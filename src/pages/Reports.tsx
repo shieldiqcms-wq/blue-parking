@@ -198,6 +198,12 @@ export function ReportsPage() {
       width: 12,
     },
     { header: 'ملاحظات', value: (r) => r.notes ?? '', width: 24 },
+    {
+      header: 'تعديلات',
+      value: (r) => r.adjustments_count || '',
+      type: 'number',
+      width: 10,
+    },
   ]
 
   const serviceColumns: SheetColumn<ServiceRow>[] = [
@@ -777,6 +783,9 @@ export function ReportsPage() {
                           اشتراك غير مدفوع {formatMoney(row.subscription_balance)}
                         </Badge>
                       )}
+                    {row.adjustments_count > 0 && (
+                      <Badge tone="slate">معدّلة</Badge>
+                    )}
                     {row.exit_time === null ? (
                       <Badge tone="blue">داخل الموقف</Badge>
                     ) : (

@@ -22,7 +22,8 @@ begin
     select * from (values
       ('profiles'), ('vehicles'), ('subscriptions'), ('pricing_rules'),
       ('parking_sessions'), ('payments'), ('ocr_captures'), ('app_settings'),
-      ('services'), ('expenses'), ('subscription_payments')
+      ('services'), ('expenses'), ('subscription_payments'),
+      ('session_adjustments')
     ) t(tbl)
   loop
     if to_regclass('public.' || quote_ident(r.tbl)) is null then
@@ -69,7 +70,8 @@ rls_check as (
     and c.relkind = 'r'
     and c.relname in ('profiles','vehicles','subscriptions','pricing_rules',
                       'parking_sessions','payments','ocr_captures','app_settings',
-                      'services','expenses','subscription_payments')
+                      'services','expenses','subscription_payments',
+                      'session_adjustments')
 ),
 
 -- 2) الحسابات ---------------------------------------------------------------
@@ -258,6 +260,30 @@ integrity as (
          (select count(*) from public.parking_sessions where amount_due < 0)::text,
          case when (select count(*) from public.parking_sessions
           where amount_due < 0) = 0 then '✅' else '❌' end, 70, 'e'
+  union all
+  -- المدفوع مقدماً في العملية = مجموع قيود الدفع المسبق (دفعات + تصحيحات)
+  select '7. سلامة البيانات', 'المدفوع مقدماً يطابق الدفعات', 'صفر اختلاف',
+         (select count(*) from public.parking_sessions s
+          where s.prepaid_amount <> coalesce((
+            select sum(p.amount) from public.payments p
+            where p.session_id = s.id and p.notes = 'دفع عند الدخول'), 0))::text,
+         case when (select count(*) from public.parking_sessions s
+          where s.prepaid_amount <> coalesce((
+            select sum(p.amount) from public.payments p
+            where p.session_id = s.id and p.notes = 'دفع عند الدخول'), 0)) = 0
+         then '✅' else '❌' end, 70, 'f'
+  union all
+  -- المحصّل في العملية المنتهية = مجموع دفعاتها الفعلية
+  select '7. سلامة البيانات', 'المحصّل يطابق الدفعات', 'صفر اختلاف',
+         (select count(*) from public.parking_sessions s
+          where s.exit_time is not null
+            and coalesce(s.amount_collected, 0) <> coalesce((
+              select sum(p.amount) from public.payments p where p.session_id = s.id), 0))::text,
+         case when (select count(*) from public.parking_sessions s
+          where s.exit_time is not null
+            and coalesce(s.amount_collected, 0) <> coalesce((
+              select sum(p.amount) from public.payments p where p.session_id = s.id), 0)) = 0
+         then '✅' else '❌' end, 70, 'g'
 ),
 
 -- 8) عدم تعرّض أي شيء للدور المجهول ------------------------------------------
@@ -321,7 +347,7 @@ data_counts as (
 
 -- 10) دفع الاشتراكات -----------------------------------------------------------
 subs_payments as (
-  select '10. دفع الاشتراكات', f.fn, 'موجودة ومتاحة للمالك فقط',
+  select '10. الدفع والتعديل', f.fn, 'موجودة ومتاحة للمالك فقط',
          case
            when to_regprocedure(f.sig) is null then 'غير موجودة'
            when has_function_privilege('anon', to_regprocedure(f.sig), 'execute')
@@ -337,10 +363,14 @@ subs_payments as (
   from (values
     ('create_subscription',
      'public.create_subscription(date,date,numeric,text,numeric,text,uuid,text,text,text,text)'),
-    ('pay_subscription', 'public.pay_subscription(uuid,numeric,text,text)')
+    ('pay_subscription', 'public.pay_subscription(uuid,numeric,text,text)'),
+    ('collect_session_payment', 'public.collect_session_payment(uuid,numeric,text,text)'),
+    ('correct_session_payment', 'public.correct_session_payment(uuid,numeric,text,text)'),
+    ('convert_session_to_subscription',
+     'public.convert_session_to_subscription(uuid,text,text)')
   ) f(fn, sig)
   union all
-  select '10. دفع الاشتراكات', 'الدفعات للقراءة فقط من التطبيق', 'لا إضافة/تعديل/حذف مباشر',
+  select '10. الدفع والتعديل', 'الدفعات للقراءة فقط من التطبيق', 'لا إضافة/تعديل/حذف مباشر',
          case when has_table_privilege('authenticated', 'public.subscription_payments', 'insert')
                 or has_table_privilege('authenticated', 'public.subscription_payments', 'update')
                 or has_table_privilege('authenticated', 'public.subscription_payments', 'delete')
@@ -383,9 +413,10 @@ order by ord1, ord2;
 --   ❌  مشكلة — راجعها قبل الاستخدام الفعلي
 --
 -- الأهم:
---   • القسم 1: كل الجداول الإحدى عشرة يجب أن تكون ✅
+--   • القسم 1: كل الجداول الاثني عشر يجب أن تكون ✅
 --   • القسم 2: «عدد حسابات المالك» = حساب واحد، وبريدك يظهر بـ «المالك»
 --   • القسم 4: كل الحالات الـ 13 يجب أن تكون ✅
 --   • القسم 8: كلا السطرين يجب أن يكونا ✅ (صفر تعرّض للمجهول)
---   • القسم 10: الأسطر الثلاثة ✅ (دفع الاشتراكات عبر دوال آمنة فقط)
+--   • القسم 7: كل الأسطر ✅ — ومنها مطابقة المدفوع والمحصّل للدفعات
+--   • القسم 10: كل الأسطر ✅ (الدفع والتعديل عبر دوال آمنة فقط)
 -- ============================================================================

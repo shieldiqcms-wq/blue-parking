@@ -6,9 +6,11 @@ import type {
   CarInside,
   LookupPlateResult,
   PaymentMethod,
+  PrepaidAction,
   PreviewExitResult,
   RegisterEntryResult,
   RegisterExitResult,
+  SessionAdjustment,
   SessionDetail,
 } from '@/types/database'
 
@@ -202,4 +204,74 @@ export async function listUnpaidSessions(): Promise<SessionDetail[]> {
 
   if (error) throw new AppError(toArabicError(error))
   return (data ?? []) as SessionDetail[]
+}
+
+/* ================= تعديل دفع السيارات الموجودة داخل الموقف ================= */
+/*
+ * لا شيء يُحذف: كل تعديل يُسجَّل كقيد جديد في الدفعات، ويُحفظ في سجل
+ * التعديلات مع القيم قبل وبعد والسبب.
+ */
+
+/** تحصيل مبلغ بعد الدخول وقبل الخروج — يُخصم من المستحق عند الخروج */
+export async function collectSessionPayment(
+  sessionId: string,
+  amount: number,
+  method: PaymentMethod = 'cash',
+  notes?: string | null,
+): Promise<{ prepaid_amount: number }> {
+  const { data, error } = await supabase.rpc('collect_session_payment', {
+    p_session_id: sessionId,
+    p_amount: amount,
+    p_payment_method: method,
+    p_notes: notes?.trim() || null,
+  })
+  if (error) throw new AppError(toArabicError(error))
+  return data as { prepaid_amount: number }
+}
+
+/** تصحيح المبلغ المسجّل عند الدخول — newAmount = ما دُفع فعلاً (0 = لم يدفع) */
+export async function correctSessionPayment(
+  sessionId: string,
+  newAmount: number,
+  reason: string,
+  method?: PaymentMethod | null,
+): Promise<{ difference: number; prepaid_amount: number }> {
+  if (!reason.trim()) throw new AppError('اكتب سبب التصحيح')
+
+  const { data, error } = await supabase.rpc('correct_session_payment', {
+    p_session_id: sessionId,
+    p_new_amount: newAmount,
+    p_reason: reason.trim(),
+    p_payment_method: method ?? null,
+  })
+  if (error) throw new AppError(toArabicError(error))
+  return data as { difference: number; prepaid_amount: number }
+}
+
+/** تحويل دخول عادي إلى دخول اشتراك (السيارة اشتركت بعد أن دخلت) */
+export async function convertSessionToSubscription(
+  sessionId: string,
+  prepaidAction: PrepaidAction = 'void',
+  reason?: string | null,
+): Promise<void> {
+  const { error } = await supabase.rpc('convert_session_to_subscription', {
+    p_session_id: sessionId,
+    p_prepaid_action: prepaidAction,
+    p_reason: reason?.trim() || null,
+  })
+  if (error) throw new AppError(toArabicError(error))
+}
+
+/** سجل تعديلات عملية — الأقدم أولاً */
+export async function listSessionAdjustments(
+  sessionId: string,
+): Promise<SessionAdjustment[]> {
+  const { data, error } = await supabase
+    .from('session_adjustments')
+    .select('*')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw new AppError(toArabicError(error))
+  return (data ?? []) as SessionAdjustment[]
 }

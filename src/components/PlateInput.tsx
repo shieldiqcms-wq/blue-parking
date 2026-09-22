@@ -92,7 +92,8 @@ export const PlateInput = forwardRef<HTMLInputElement, PlateInputProps>(
             autoFocus={autoFocus}
             disabled={disabled}
             inputMode="numeric"
-            pattern="[0-9-]*"
+            // الشرطة مهرّبة: المتصفحات الحديثة تفسّر pattern بعلَم v الذي يرفض «-» غير المهرّبة
+            pattern="[0-9\-]*"
             enterKeyHint="search"
             autoComplete="off"
             autoCorrect="off"

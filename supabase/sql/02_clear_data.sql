@@ -13,6 +13,7 @@
 --   • كل الاشتراكات
 --   • كل السيارات
 --   • سجل قراءات الكاميرا
+--   • سجل تعديلات العمليات
 --
 -- ما يبقى كما هو:
 --   • حسابك وصلاحيتك (profiles / auth.users)
@@ -43,6 +44,7 @@ select 'قبل الحذف' as "الحالة",
 -- ----------------------------------------------------------------------------
 begin;
 
+delete from public.session_adjustments;
 delete from public.payments;
 delete from public.subscription_payments;
 delete from public.ocr_captures;

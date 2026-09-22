@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   Banknote,
@@ -13,10 +13,15 @@ import {
   LogOut,
   Search,
   Ticket,
+  Wallet,
 } from 'lucide-react'
 import { PlateCamera } from '@/components/PlateCamera'
 import { PlateInput } from '@/components/PlateInput'
 import { ServiceDialog } from '@/components/ServiceDialog'
+import {
+  SessionPaymentDialog,
+  type SessionPaymentMode,
+} from '@/components/SessionPaymentDialog'
 import {
   SubscriptionPayDialog,
   type SubscriptionDue,
@@ -120,6 +125,24 @@ export function GatePage() {
 
   // تحصيل اشتراك غير مدفوع (تذكير عند الدخول)
   const [subPay, setSubPay] = useState<SubscriptionDue | null>(null)
+
+  // تعديل دفع سيارة داخل الموقف (تحصيل / تصحيح / تحويل لاشتراك)
+  const [sessionPayMode, setSessionPayMode] = useState<SessionPaymentMode | null>(null)
+
+  // ثابت الهوية حتى لا تُعاد تهيئة النافذة مع كل إعادة رسم
+  const sessionPayTarget = useMemo(() => {
+    const active = lookup?.active_session
+    if (!sessionPayMode || !active) return null
+    return {
+      sessionId: active.id,
+      plate: lookup?.vehicle?.plate_number ?? '',
+      sessionType: active.session_type,
+      entryTime: active.entry_time,
+      prepaidAmount: Number(active.prepaid_amount ?? 0),
+      prepaidMethod: active.prepaid_method,
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(sessionPayMode), lookup])
 
   // النتيجة
   const [entryResult, setEntryResult] = useState<RegisterEntryResult | null>(null)
@@ -559,6 +582,15 @@ export function GatePage() {
 
   const activeSession = lookup?.active_session ?? null
   const isInside = Boolean(activeSession)
+  // اشتركت بعد أن دخلت: الدخول ما زال «زيارة» والاشتراك ساري الآن
+  const subscribedAfterEntry =
+    activeSession?.session_type === 'one_time' && Boolean(lookup?.subscription)
+
+  const refreshAfterSessionChange = async () => {
+    setSessionPayMode(null)
+    const fresh = await lookupPlate(lookup?.vehicle?.plate_number ?? plate).catch(() => null)
+    if (fresh) setLookup(fresh)
+  }
   const monthly = preview?.session.session_type === 'monthly'
   // الأساس هو المتبقّي بعد خصم ما دُفع عند الدخول
   const dueAmount = preview?.remaining_amount ?? 0
@@ -684,6 +716,37 @@ export function GatePage() {
 
             {subReminder}
 
+            {isInside && activeSession?.session_type === 'one_time' && (
+              <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
+                {Number(activeSession.prepaid_amount) > 0 ? (
+                  <Badge tone="green">
+                    مدفوع عند الدخول {formatMoney(activeSession.prepaid_amount)} {CURRENCY}
+                  </Badge>
+                ) : (
+                  <Badge tone="amber">لم يدفع بعد</Badge>
+                )}
+              </p>
+            )}
+
+            {subscribedAfterEntry && (
+              <div className="flex flex-col gap-2.5 rounded-xl border-2 border-violet-200 bg-violet-50 p-3">
+                <p className="flex items-start gap-2 text-sm text-violet-900">
+                  <Ticket className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" aria-hidden />
+                  <span>
+                    هذه السيارة <b>اشتركت بعد دخولها</b> — الدخول مسجّل كزيارة عادية.
+                    حوّله إلى اشتراك حتى لا تُحتسب عليه رسوم عند الخروج.
+                  </span>
+                </p>
+                <Button
+                  size="sm"
+                  onClick={() => setSessionPayMode('convert')}
+                  icon={<Ticket className="h-4 w-4" aria-hidden />}
+                >
+                  تحويل الدخول إلى اشتراك
+                </Button>
+              </div>
+            )}
+
             {lookup.is_closed_day && (
               <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-900">
                 <CalendarX className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -731,6 +794,16 @@ export function GatePage() {
                 ? 'السيارة داخل الموقف — الدخول غير متاح حتى تسجيل الخروج'
                 : 'السيارة ليست داخل الموقف — الخروج غير متاح'}
             </p>
+
+            {isInside && activeSession?.session_type === 'one_time' && (
+              <Button
+                variant="secondary"
+                onClick={() => setSessionPayMode('collect')}
+                icon={<Wallet className="h-4 w-4" aria-hidden />}
+              >
+                الدفع قبل الخروج / تصحيح المدفوع
+              </Button>
+            )}
           </div>
         </Card>
       )}
@@ -1303,6 +1376,13 @@ export function GatePage() {
       />
 
       {subPayDialog}
+
+      <SessionPaymentDialog
+        target={sessionPayTarget}
+        initialMode={sessionPayMode ?? 'collect'}
+        onClose={() => setSessionPayMode(null)}
+        onChanged={() => void refreshAfterSessionChange()}
+      />
 
       <ServiceDialog
         open={serviceOpen}
